@@ -344,7 +344,11 @@ backend  后端工程师（worker）
 | `expert(id, { phase: "build" })` | 显式推进一格（`spec → build`、`build → review`） |
 | `build` 阶段打开审查专家（`kind: reviewer`） | `build` → `review` |
 
-状态按会话落盘：`<STATE_DIR>/sessions/<sessionId>.json`。会话 id 取 `payload.agent.id`——宿主里它等于 `agent.session.id`（`dsh-agent/lib/index.js:513-514` 有一处断言，可以直接信）。文件坏了、丢了、字段怪，都当作「空闲」，不让状态机把挂载搞崩。
+状态落在**项目**里：`<项目目录>/.capability-router/state.json`。会话文件 `<STATE_DIR>/sessions/<sessionId>.json` 只留一个指针（外加阶段镜像），pre-step 先看项目状态、再回落会话自己。
+
+为什么要按项目而不是按会话：多代理协作时同一个项目会被好几个会话接手——接单一个、实现一个、审查一个。验收里真出现过同一个项目在三个会话里分别是 `spec` / `idle` / `review`，谁也说不清现在到哪一步了。**阶段属于项目，会话只是执行者。**
+
+会话 id 取 `payload.agent.id`（等于 `agent.session.id`，`dsh-agent/lib/index.js:513-514` 有断言）。项目路径由 `expert(name, { project: "<绝对路径>" })` 显式给出，之后这个会话的后续调用会自动沿用记住的路径。文件坏了、丢了、字段怪，都当作「空闲」，不让状态机把挂载搞崩。
 
 ### 为什么需要「显式交卷」
 
