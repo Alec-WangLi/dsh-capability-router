@@ -13,9 +13,13 @@ window.__ModuleLoader__.load({
     var inject = ["slots"];
     var PANEL_PATH = "/capability-router/panel";
 
-    function panelFrame(tall) {
+    function panelFrame(tall, sessionId) {
+      // 会话页那格只该看当前会话：把 sessionId 带进地址，面板自己过滤。
+      var src = typeof sessionId === "string" && sessionId !== ""
+        ? PANEL_PATH + "?session=" + encodeURIComponent(sessionId)
+        : PANEL_PATH;
       return React.createElement("iframe", {
-        src: PANEL_PATH,
+        src: src,
         title: "能力路由 · 面板",
         style: {
           width: "100%",
@@ -43,8 +47,8 @@ window.__ModuleLoader__.load({
       ctx.slots.inject("conversation.view", function () {
         return ctx.slots.register(
           { name: "conversation.view", id: "capability-router", order: 40, label: function () { return "编排"; } },
-          function SessionPanel() {
-            return panelFrame(true);
+          function SessionPanel(props) {
+            return panelFrame(true, props && props.sessionId);
           },
         );
       });

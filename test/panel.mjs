@@ -95,6 +95,30 @@ fs.mkdirSync(sessionsDir, { recursive: true });
   assert.ok(empty.includes("没有落空记录"));
 }
 
+// 场景六：带 sessionId 时只看这一个会话；缺口仍全局，并在标题上说明范围
+{
+  const runs = path.join(tmp, "runs.jsonl");
+  fs.appendFileSync(
+    runs,
+    `${JSON.stringify({ at: "2026-11-01T11:00:00.000Z", session: "other", phase: "build", rout: "hit", expert: "backend", injected: [] })}\n`,
+    "utf8",
+  );
+
+  const scoped = collect(tmp, { sessionId: "b" });
+  assert.equal(scoped.scope, "b");
+  assert.ok(scoped.sessions.every((row) => row.sessionId === "b"), "会话列表只剩这一个");
+  assert.ok(scoped.runs.every((row) => row.session === "b"), "runs 只剩这一个会话的");
+
+  const html = renderHtml(scoped);
+  assert.match(html, /会话 b/, "标题要写清看的是哪个会话");
+  assert.match(html, /缺口队列是全局的/);
+  assert.ok(!html.includes("other"), "别的会话不该出现在这一页");
+
+  const all = collect(tmp);
+  assert.equal(all.scope, undefined);
+  assert.ok(all.runs.some((row) => row.session === "other"), "不带参数时仍然看全部");
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log("场景一 runs 读取      ✓");
@@ -102,4 +126,5 @@ console.log("场景二 会话读取        ✓");
 console.log("场景三 缺口聚合        ✓");
 console.log("场景四 collect 组装    ✓");
 console.log("场景五 渲染与转义      ✓");
+console.log("场景六 按会话过滤      ✓");
 console.log("面板数据层测试通过");

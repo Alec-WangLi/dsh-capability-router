@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { PANEL_PATH, STATE_PATH, attachWebPanel, panelRoutes, snapshot } from "../lib/web.js";
+import { PANEL_PATH, STATE_PATH, attachWebPanel, panelRoutes, sessionFromUrl, snapshot } from "../lib/web.js";
 
 /**
  * 宿主侧面板路由的测试：形状对不对（exact + 路径）、响应能不能拿、挂载失败会不会炸。
@@ -108,6 +108,25 @@ const options = { stateDir, dshHome: tmp };
   assert.ok(registered.includes(PANEL_PATH) && registered.includes(STATE_PATH));
 }
 
+// 场景六：?session= 解析——空值/怪值当没传；路由按它过滤
+{
+  assert.equal(sessionFromUrl("/capability-router/panel?session=s1"), "s1");
+  assert.equal(sessionFromUrl("/capability-router/panel?session=%20%20"), undefined, "空白当没传");
+  assert.equal(sessionFromUrl("/capability-router/panel"), undefined);
+  assert.equal(sessionFromUrl("::not a url::"), undefined, "坏 url 不炸");
+
+  const route = panelRoutes(options).find((row) => row.path === STATE_PATH);
+  const response = fakeResponse();
+  route.handler({ url: `${STATE_PATH}?session=s1` }, response);
+  const body = JSON.parse(response.out.body);
+  assert.equal(body.scope, "s1");
+  assert.ok(body.sessions.every((row) => row.sessionId === "s1"));
+
+  const htmlResponse = fakeResponse();
+  panelRoutes(options).find((row) => row.path === PANEL_PATH).handler({ url: `${PANEL_PATH}?session=s1` }, htmlResponse);
+  assert.match(htmlResponse.out.body, /会话 s1/);
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log("场景一 路由形状      ✓");
@@ -115,4 +134,5 @@ console.log("场景二 快照接口      ✓");
 console.log("场景三 页面接口      ✓");
 console.log("场景四 snapshot      ✓");
 console.log("场景五 挂载容错      ✓");
+console.log("场景六 会话参数      ✓");
 console.log("面板路由测试通过");

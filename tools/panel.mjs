@@ -18,10 +18,8 @@
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { checkSupply } from "../lib/doctor.js";
-import { expertDirs, scanExperts } from "../lib/experts.js";
-import { collect, renderHtml } from "../lib/panel.js";
-import { defaultSkillDirs, discoverSkills } from "../lib/skills.js";
+import { renderHtml } from "../lib/panel.js";
+import { sessionFromUrl, snapshot } from "../lib/web.js";
 
 const argv = process.argv.slice(2);
 
@@ -61,12 +59,9 @@ if (argv.length > 0) {
 const DSH_HOME = process.env.DSH_HOME || path.join(os.homedir(), ".dsh");
 const STATE_DIR = path.join(DSH_HOME, "capability-router");
 
-/** 每次请求重新读一遍：面板要能显示刚刚发生的事，不做缓存。 */
-function snapshot() {
-  const { experts } = scanExperts({ dirs: expertDirs(STATE_DIR) });
-  const installed = discoverSkills(defaultSkillDirs(DSH_HOME, extraDirs));
-  const doctor = checkSupply(experts, new Set(installed.keys()));
-  return collect(STATE_DIR, { doctor, experts: experts.map((expert) => ({ id: expert.id, name: expert.name, kind: expert.kind })) });
+/** 每次请求重新读一遍：面板要能显示刚刚发生的事，不做缓存。与宿主路由共用同一份实现。 */
+function current(request) {
+  return snapshot({ stateDir: STATE_DIR, dshHome: DSH_HOME, extraSkillDirs: extraDirs, sessionId: sessionFromUrl(request?.url) });
 }
 
 const server = http.createServer((request, response) => {
@@ -74,7 +69,7 @@ const server = http.createServer((request, response) => {
   try {
     if (url.pathname === "/api/state") {
       response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-      response.end(JSON.stringify(snapshot(), null, 2));
+      response.end(JSON.stringify(current(request), null, 2));
       return;
     }
     if (url.pathname === "/health") {
@@ -84,7 +79,7 @@ const server = http.createServer((request, response) => {
     }
     if (url.pathname === "/" || url.pathname === "/index.html") {
       response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-      response.end(renderHtml(snapshot()));
+      response.end(renderHtml(current(request)));
       return;
     }
     response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });

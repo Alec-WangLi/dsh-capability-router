@@ -124,7 +124,7 @@ lib/doctor.js     技能供给检查（纯计算，不碰文件系统）
 lib/yaml.js       YAML 子集解析器（为了零依赖手写的）
 experts/<id>/     专家包：expert.yml + role.md，首批 7 个（含接单 intake、审查 review）
 client/index.js   浏览器半边：插件详情页与会话页各挂一个 iframe，无构建步骤
-test/             十三套 91 个场景
+test/             十四套 99 个场景
 tools/            match（验收）· doctor（体检）· panel（只读面板）· forge（造专家）· gaps（汇总）· dump-session（会话日志）
 docs/             功能说明 · 安装与排障
 DESIGN.md         设计取舍、宿主 API 实测、踩过的坑
@@ -151,7 +151,7 @@ node tools/dump-session.mjs ~/.dsh/sessions/<slug>/session-<id> --stats
 
 ## 状态
 
-v0.15.0。按里程碑看：
+v0.16.0。按里程碑看：
 
 | 版本 | 内容 |
 |---|---|
@@ -165,6 +165,7 @@ v0.15.0。按里程碑看：
 | v0.13.0 | 匹配器 `multi`：跨领域不再硬选一个；匹配器彻底降级为提示 |
 | v0.14.0 | 面板挂上宿主路由，加 client 半边：插件详情页与会话页「编排」tab |
 | v0.15.0 | 阶段有了显式出口（`expert(id, {phase})`，只能往前走一格）；面板会话卡显示中文阶段名 |
+| v0.16.0 | 面板分范围：详情页看全部会话，会话页「编排」只看当前会话（`?session=`） |
 
 下一步是真实项目跑一遍验收场景（视频监控：用户说两句 → 接单进 spec → 分派 → 审查收口），把「能跑到哪一步」摸清楚。
 

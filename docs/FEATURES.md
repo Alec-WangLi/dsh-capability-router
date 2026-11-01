@@ -593,6 +593,20 @@ npm run panel -- --dir D:/skills
 | 宿主路由 | `http://<DSH 的地址>/capability-router/panel` | GUI，同源同端口 |
 | client 半边 | 插件详情页那块 + 会话页「编排」tab | 日常看 |
 
+### 两个 iframe 看的不是同一批数据
+
+| 落点 | 地址 | 范围 |
+|---|---|---|
+| 插件详情页 | `/capability-router/panel` | 全部会话（概览） |
+| 会话页「编排」tab | `/capability-router/panel?session=<会话id>` | 只有当前会话 |
+
+会话 id 由 slot 的 `sessionId` 属性传进来（`conversation.view` 的 standardProps 里有它），client 半边把它拼进 iframe 地址，过滤发生在服务端的 `collect(stateDir, { sessionId })`——不是前端隐藏，是根本不读别的会话。
+
+两处刻意的不对称：
+
+- **缺口队列始终是全局的**。`gaps.jsonl` 不按会话记录（它回答的是「哪类活反复没人接」，这在会话之间才有意义），所以单会话视图里也保留，并在标题上标一句。
+- **`runs.jsonl` 单会话视图会读更多行再筛**：文件是全局追加的，只看最后 200 行可能一个当前会话的记录都没有。所以按会话视图时先读 5000 行再筛最后 200。
+
 **为什么又做一份路由版**：独立进程的 `127.0.0.1` 在远程访问时指向用户自己的机器（billion-context 专门写了 `remote_blocked` 文案），而宿主路由与 GUI 同源同端口，远程访问天然正确，还免了跨域。数据层是同一份 `lib/panel.js`。
 
 ### client 半边：一个 80 行的文件，没有构建步骤
