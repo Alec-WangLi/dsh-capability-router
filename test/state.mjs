@@ -92,9 +92,11 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-state-"));
   assert.equal(back.changed, false);
   assert.match(back.error, /只能往前走/);
 
-  const skip = advancePhase(spec, "review");
-  assert.equal(skip.changed, false);
-  assert.match(skip.error, /不能跳着走/);
+  // 跨多格是允许的：新会话接手既有项目时要从 idle 直接落到 build/review
+  const jump = advancePhase(spec, "review");
+  assert.equal(jump.changed, true);
+  assert.equal(jump.state.phase, "review");
+  assert.equal(advancePhase(newState("s8"), "review").state.phase, "review", "新会话可以直接接过阶段");
 
   const bogus = advancePhase(spec, "shipping");
   assert.equal(bogus.changed, false);

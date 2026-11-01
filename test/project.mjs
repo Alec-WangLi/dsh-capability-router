@@ -126,10 +126,14 @@ async function step(handler, agentId, messages) {
   assert.equal(worker.found, true);
   assert.ok(!(worker.note ?? "").includes("需求还没确认"), `进 build 后不该再提醒需求未确认：${worker.note}`);
 
+  const review = await tool.execute({ name: "review", phase: "review" }, { agent: { id: "sess-4" } });
+  assert.equal(review.found, true);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(STATE_DIR, "sessions", "sess-4.json"), "utf8")).phase, "review", "跨一格也允许");
+
   const back = await tool.execute({ name: "intake", phase: "spec" }, { agent: { id: "sess-4" } });
   assert.match(back.note ?? "", /只能往前走/);
   const after = JSON.parse(fs.readFileSync(path.join(STATE_DIR, "sessions", "sess-4.json"), "utf8"));
-  assert.equal(after.phase, "build", "被拒绝的推进不该改状态");
+  assert.equal(after.phase, "review", "被拒绝的推进不该改状态（此时已推进到 review）");
 }
 
 // 场景五：关掉 project 就当没有状态——检查点回来
