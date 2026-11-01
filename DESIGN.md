@@ -105,11 +105,13 @@ DSH 原生有 `~/.dsh/.agent-presets/`（本机现有 liangshen / redteam / unre
 ### 文件地图
 
 ```text
-C:\Users\Alec\.dsh\plugins\capability-router\
+C:\Users\Alec\Documents\DeepSeekHermesData\DSH-capability-router dev\   ← 唯一源码（git 仓库）
   package.json          name: dsh-capability-router, type: module, main: lib/index.js
+                        dsh.bundle.patch = cordis.patch.yml（GUI 安装的唯一凭据）
                         peerDependencies: {"@deepseek-ai/cordis": "~4.0.5"}
+  cordis.patch.yml      bundle 层入口：insert 一条 capability-router
   lib/index.js          全部逻辑（单文件，约 300 行）
-  test/smoke.mjs        假 ctx 跑 apply，九个场景
+  test/smoke.mjs        假 ctx 跑 apply，九个场景
   README.md             给用户看的用法
   DESIGN.md             本文件
   experts/<id>/         专家包（未实现）
@@ -118,16 +120,40 @@ C:\Users\Alec\.dsh\plugins\capability-router\
 ### 挂载链路
 
 ```text
-C:\Users\Alec\.dsh\profiles\desktop\node_modules\dsh-capability-router
-  ⇒ C:\Users\Alec\.dsh\plugins\capability-router     (junction)
+C:\Users\Alec\Documents\DeepSeekHermesData\DSH-capability-router dev   (唯一源码)
+  ⇐ C:\dev\dsh-capability-router                                      (junction，不含空格的稳定别名)
+  ⇐ ~/.dsh/profiles/desktop/node_modules/dsh-capability-router        (profile 安装位，pnpm 记成 link:)
 
-C:\Users\Alec\.dsh\profiles\desktop\cordis.patch.yml:
+包 package.json：
+  "dsh": { "bundle": { "patch": "cordis.patch.yml" } }                ← 没有这行 GUI 直接拒装
+    ↓ 安装时 dsh-plugin-manager 的 reconcile()
+~/.dsh/profiles/desktop/package.json
+  dependencies["dsh-capability-router"] = "link:…"                    ← 登记，进 pnpm-lock.yaml
+  dsh.profile.bundles = [ …, "dsh-capability-router" ]                ← 成为 profile layer
+
+包根 cordis.patch.yml（本包自带）：
   - insert:
       - id: capability-router
         name: dsh-capability-router
 ```
 
+patch 的应用顺序是「各 bundle 的 patch → profile 的 `cordis.patch.yml` → `~/.dsh/cordis.patch.yml`」
+（`dsh-app-boot` `readProfilePatches`）。既然入口已经在包内，profile 的 patch 里就不要再写同一条——
+同一 id 会挂两次，检查点重复注入。
+
 **`insert` 不能省**，见第七节。
+
+**光有 insert + 解析得到，只算「能加载」，不算「已安装」。** 官方口径里包还得登记进 profile 的
+`package.json` dependencies 与 `pnpm-lock.yaml`；不登记时插件面板/库存（`dsh-host-plugin-inventory`）
+看不见它，`dsh.compatibility` 的版本闸（`evaluatePluginCompatibility`）不跑，重装修复时那条游离的
+`node_modules` 目录也有被清掉的风险。desktop profile 由 Electron 独占管理
+（`dsh plugin --profile desktop list` → `profile "desktop" is managed exclusively by the Electron application`），
+所以登记只能走 GUI：插件 → 添加插件 → 输入源码绝对路径（`C:\dev\dsh-capability-router` 别名亦可，
+两条路径 pnpm 11 都实测可用，带空格那条会记成 `link:C:/Users/…/DSH-capability-router dev`）。
+登记动作由 `reconcile()` 完成，前提是包声明了 `dsh.bundle`——否则 GUI 报
+`dsh-capability-router declares no dsh.bundle`（`dsh-plugin-manager/lib/index.js:1866` 的 `not-a-bundle` 分支），
+CLI 那条路只 warn 一句 `installed as a plain dependency, not a profile layer` 就当普通依赖装进去了。
+本地目录会被 pnpm 记成 `link:`，源码仍只有一份。
 
 ---
 

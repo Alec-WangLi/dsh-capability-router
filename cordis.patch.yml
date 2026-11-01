@@ -1,0 +1,9 @@
+# 本包作为 profile layer（bundle）挂载时的入口。
+# 插件管理器安装后会把 dsh-capability-router 写进 profile package.json 的
+# dsh.profile.bundles，启动时先应用各 bundle 的 patch，再应用 profile 自己的
+# cordis.patch.yml。所以：
+#   - profile 的 cordis.patch.yml 里不要再写同一条 insert，否则同一 id 出现两次。
+#   - insert 不能省：不带 insert 的 patch 只能改已有条目，新 id 会被静默跳过。
+- insert:
+    - id: capability-router
+      name: dsh-capability-router

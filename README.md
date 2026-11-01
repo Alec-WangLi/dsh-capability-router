@@ -72,26 +72,40 @@ node tools/dump-session.mjs ~/.dsh/sessions/<slug>/session-<id> --out dump.jsonl
 
 ## 安装方式
 
-开发目录在 `C:\dev\dsh-capability-router`，profile 通过 junction 引用它：
+**源码只有一份**，放在哪都行；`C:\dev\dsh-capability-router` 只是个不含空格的稳定别名（junction）。profile 再链接到别名：
 
 ```text
-~/.dsh/profiles/desktop/node_modules/dsh-capability-router
-  ⇒ C:\dev\dsh-capability-router
+C:\Users\Alec\Documents\DeepSeekHermesData\DSH-capability-router dev   ← 唯一源码（git 仓库）
+  ⇐ C:\dev\dsh-capability-router                                      ← junction，稳定别名
+  ⇐ ~/.dsh/profiles/desktop/node_modules/dsh-capability-router        ← profile 安装位
 ```
+
+别在 `~/.dsh/plugins/` 下再建副本——运行时根本不扫那个目录。
+
+唯一受支持的安装动作：DSH → 插件 → 添加插件，输入**源码目录的绝对路径**。它会走 `dsh-plugin-manager` 的 `reconcile()`：登记 profile `package.json` 的 `dependencies` 与 `pnpm-lock.yaml` → 把包名推进 `dsh.profile.bundles` → 校验包内 patch 能解析。手写链接不会登记，插件面板看不见、版本兼容校验也不跑。
+
+被 GUI 接受的前提是包里声明了 `dsh.bundle`，否则直接拒：`dsh-capability-router declares no dsh.bundle`（`dsh-plugin-manager/lib/index.js:1866` 的 `not-a-bundle` 分支）。本包已声明：
+
+```json
+"dsh": { "bundle": { "patch": "cordis.patch.yml" }, "compatibility": { … } }
+```
+
+包内 `cordis.patch.yml` 就是加载入口：
+
+```yaml
+- insert:
+    - id: capability-router
+      name: dsh-capability-router
+```
+
+patch 的应用顺序是「各 bundle 的 patch → profile 的 `cordis.patch.yml` → `~/.dsh/cordis.patch.yml`」（`dsh-app-boot` `readProfilePatches`）。**所以 profile 自己的 patch 里不要再写同一条 insert**，同一 id 会挂两次、检查点会重复注入。
+
+带空格的路径 pnpm 11 实测能吃（`link:C:/Users/…/DSH-capability-router dev` 解析正常）；不想敲长路径也可以用 `C:\dev\dsh-capability-router` 这个别名，效果一样。手动兜底（GUI 不可用时）才需要自己建链接 + 改 profile `package.json` + 手写 insert。
 
 建立链接（管理员或开发者模式下）：
 
 ```bash
 cmd //c "mklink /J %USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-capability-router C:\dev\dsh-capability-router"
-```
-
-profile 的 `cordis.patch.yml` 末尾：
-
-```yaml
-# capability-router：本机自研，通过 insert 新增（非 insert 的 patch 只能改已有条目）
-- insert:
-    - id: capability-router
-      name: dsh-capability-router
 ```
 
 **`insert` 不能省。** 不带 `insert` 的 patch 是「按 id 覆盖已存在条目」，新 id 匹配不到时 `applyEntryPatches` 只输出一条 warn 就跳过，插件静默不加载，日志里也翻不到。只有 `insert` 分支能新增条目（不带 `id` 的 insert 直接 push 到根数组）。
