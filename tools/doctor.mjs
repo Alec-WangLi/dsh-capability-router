@@ -17,6 +17,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { checkSupply, doctorExitCode, renderReport } from "../lib/doctor.js";
+import { defaultSkillDirs, discoverSkills } from "../lib/skills.js";
 import { expertDirs, scanExperts } from "../lib/experts.js";
 
 const argv = process.argv.slice(2);
@@ -52,32 +53,7 @@ if (argv.length > 0) {
 
 const DSH_HOME = process.env.DSH_HOME || path.join(os.homedir(), ".dsh");
 const STATE_DIR = path.join(DSH_HOME, "capability-router");
-const SKILL_DIRS = [path.join(DSH_HOME, "skills"), ...extraDirs];
-
-/** 技能目录 = 里面有一个 SKILL.md 的子目录（大小写不敏感）。 */
-function discoverSkills(dirs) {
-  const found = new Map();
-  for (const dir of dirs) {
-    let entries;
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const child = path.join(dir, entry.name);
-      let files;
-      try {
-        files = fs.readdirSync(child);
-      } catch {
-        continue;
-      }
-      if (files.some((file) => file.toLowerCase() === "skill.md")) found.set(entry.name, child);
-    }
-  }
-  return found;
-}
+const SKILL_DIRS = defaultSkillDirs(DSH_HOME, extraDirs);
 
 const { experts, errors, warnings } = scanExperts({ dirs: expertDirs(STATE_DIR) });
 const installed = discoverSkills(SKILL_DIRS);

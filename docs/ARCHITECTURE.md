@@ -294,7 +294,7 @@ client 半边只有一层壳：tab 导航 + iframe(src = panel 地址)
 
 ### 分两步，别混
 
-- **第一步（不依赖任何 UI 能力）**：`tools/panel.mjs` 只读面板。状态模型有了它就有的看。
+- **第一步（不依赖任何 UI 能力）**：`tools/panel.mjs` 只读面板——v0.12.0 已交付，HTML 在 `lib/panel.js`，HTTP 在 `tools/panel.mjs`，`/api/state` 直接给第二半当数据源。
 - **第二步（依赖 client 半边）**：加 ~100 行壳（tab + iframe）挂到上面两个 slot。
 
 ### 坑（billion-context 踩过并写在文案里的）
@@ -316,7 +316,7 @@ client 半边只有一层壳：tab 导航 + iframe(src = panel 地址)
 | 3 | ~~专家目录进系统提示 + `expert()` 工具~~ **已完成 v0.9.0** | `npm test` 68 场景；真机待验证「模型会自己调 `expert()`」 | 中，工具 schema 要对 |
 | 4 | ~~会话状态 + 阶段闸门 + `runs.jsonl`~~ **已完成 v0.10.0** | 打开 `expert("intake")` 进 spec，之后每步只收状态卡 | 会话身份已确认：`payload.agent.id` === `agent.session.id` |
 | 5 | ~~加 `intake`、`review` 两个专家包~~ **已完成 v0.11.0** | `npm test` 79 场景；匹配器 a/b 集 20/20 未回退 | 中，提示词要反复调 |
-| 6 | `tools/panel.mjs` 只读面板 | 浏览器里能看到第 4 步的状态 | 低 |
+| 6 | ~~`tools/panel.mjs` 只读面板~~ **已完成 v0.12.0** | `npm run panel` 打开三屏：会话阶段 / 最近 25 步 / 缺口队列 + 技能供给 | 低 |
 | 7 | 匹配器 `multi` 结论 + 降级为提示 | 「视频监控」判成 multi 而不是 miss | 低 |
 | 8 | client 半边：`plugins.bundle.config` + `conversation.view` 两个 slot 的壳，iframe 嵌第 6 步的面板 | 插件详情页出现「能力路由」那块；会话页出现「编排」tab | 中，`package.json` 要加 `dsh.client` 与 `exports["./client"]`，改了要重装才生效 |
 

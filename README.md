@@ -59,6 +59,7 @@ npm run accept            # 匹配器验收集（a 回归 + b 口语）
 node tools/match.mjs --set c   # 泛化探针
 
 npm run doctor            # 专家的技能依赖装齐了没
+npm run panel             # 只读面板：会话阶段 / 最近 25 步 / 缺口队列 / 技能供给
 npm run gaps              # 哪个领域反复没人接
 node tools/gaps.mjs --json
 
@@ -113,13 +114,15 @@ lib/index.js      插件本体：挂载、pre-step 路由、两处注入、自�
 lib/experts.js    专家包发现与校验（内层覆盖外层）
 lib/catalog.js    专家目录（系统提示段）+ expert(name) 工具定义
 lib/state.js      会话状态、阶段闸门、状态卡
+lib/panel.js      只读面板的数据层与渲染（HTML）
+lib/skills.js     技能目录扫描（doctor 与 panel 共用）
 lib/router.js     规则匹配器：一句话判给哪个专家
 lib/gap.js        缺口判定与文案
 lib/doctor.js     技能供给检查（纯计算，不碰文件系统）
 lib/yaml.js       YAML 子集解析器（为了零依赖手写的）
 experts/<id>/     专家包：expert.yml + role.md，首批 7 个（含接单 intake、审查 review）
-test/             十一套 79 个场景
-tools/            match（验收）· doctor（供给体检）· forge（造专家）· gaps（缺口汇总）· dump-session（会话日志 dump）
+test/             十二套 84 个场景
+tools/            match（验收）· doctor（体检）· panel（只读面板）· forge（造专家）· gaps（汇总）· dump-session（会话日志）
 docs/             功能说明 · 安装与排障
 DESIGN.md         设计取舍、宿主 API 实测、踩过的坑
 ```
@@ -145,4 +148,4 @@ node tools/dump-session.mjs ~/.dsh/sessions/<slug>/session-<id> --stats
 
 ## 状态
 
-v0.11.0。检查点的效果有 A/B 对照数据；专家路由、角色注入、缺口提示、缺口记账、造专家均已落地并有测试。按专家收窄技能目录（`narrow`）已在 v0.7.0 删除——它在真机上撞到宿主的作用域分层天花板，且服务错了对象（会话而非单条消息），下一版由专家编排取代；专家包升到 v2（`kind` / `handoff` / `deliverables` + 技能依赖声明），配 `npm run doctor` 供给体检。v0.9.0 起多了一个入口：专家目录常驻系统提示 + `expert(name)` 工具按需取详情——判断权从插件交回模型。v0.10.0 起加了项目模式：会话有阶段、闸门只提示、旧的三条提示协议在项目里让位给状态卡。v0.11.0 补齐入口与收口两个专家：接单把需求收敛成 `REQUIREMENTS.md` + `TASKS.md`，审查按同一份标准逐条核对。
+v0.12.0。检查点的效果有 A/B 对照数据；专家路由、角色注入、缺口提示、缺口记账、造专家均已落地并有测试。按专家收窄技能目录（`narrow`）已在 v0.7.0 删除——它在真机上撞到宿主的作用域分层天花板，且服务错了对象（会话而非单条消息），下一版由专家编排取代；专家包升到 v2（`kind` / `handoff` / `deliverables` + 技能依赖声明），配 `npm run doctor` 供给体检。v0.9.0 起多了一个入口：专家目录常驻系统提示 + `expert(name)` 工具按需取详情——判断权从插件交回模型。v0.10.0 起加了项目模式：会话有阶段、闸门只提示、旧的三条提示协议在项目里让位给状态卡。v0.11.0 补齐入口与收口两个专家：接单把需求收敛成 `REQUIREMENTS.md` + `TASKS.md`，审查按同一份标准逐条核对。v0.12.0 补上 `npm run panel` 只读面板：会话阶段、最近 25 步、缺口队列、技能供给一屏看完。
