@@ -526,6 +526,7 @@ npm run check # 六个源文件的语法检查
 | `test/gap.mjs` | 8 | 任务判定、三种文案出口 |
 | `test/state.mjs` | 6 | 文件名规整、读写、打开即推进、闸门、状态卡、怪状态 |
 | `test/project.mjs` | 5 | 集成：目录压制角色、状态卡取代检查点、runs 记账、工具推进状态、可关 |
+| `test/web.mjs` | 5 | 路由形状、快照接口、页面接口、snapshot、挂载容错 |
 | `test/panel.mjs` | 5 | runs/会话读取、缺口聚合、collect 组装、渲染转义 |
 | `test/doctor.mjs` | 6 | 必装缺失、宿主自带不查、自带技能算数、可选只提示、文案 |
 | `test/route.mjs` | 5 | 集成：一句话进来后模型看到什么变了（含「路由不碰目录」） |
@@ -560,6 +561,49 @@ npm run panel -- --dir D:/skills
 - **只听 loopback、只读、不写文件**。面板是旁路，挂了不影响插件；远程访问时这个地址指向用户自己的机器，将来 client 半边嵌入时要处理（billion-context 的做法是给一段 `remote_blocked` 文案）。
 - **每次请求重新读文件，不做缓存**。面板要显示「刚刚发生的事」，缓存等于骗自己。
 - **数据层与渲染层分开**（`lib/panel.js` 出 HTML，`tools/panel.mjs` 出 HTTP）。宿主换 UI 通道时换的是壳，不是这一层——第 8 步的 client 半边就是换壳。
+
+---
+
+### 同一个面板，三种打开方式
+
+| 方式 | 地址 | 谁在用 |
+|---|---|---|
+| 独立进程 | `npm run panel` → `127.0.0.1:<port>/` | 不启动 DSH 也能看；命令行排查 |
+| 宿主路由 | `http://<DSH 的地址>/capability-router/panel` | GUI，同源同端口 |
+| client 半边 | 插件详情页那块 + 会话页「编排」tab | 日常看 |
+
+**为什么又做一份路由版**：独立进程的 `127.0.0.1` 在远程访问时指向用户自己的机器（billion-context 专门写了 `remote_blocked` 文案），而宿主路由与 GUI 同源同端口，远程访问天然正确，还免了跨域。数据层是同一份 `lib/panel.js`。
+
+### client 半边：一个 80 行的文件，没有构建步骤
+
+`client/index.js` 就是产物，形状照宿主加载器来（见 `@deepseek-ai/dsh-client-modules`）：
+
+```js
+window.__ModuleLoader__.load({
+  id: "dsh-capability-router",
+  factory: (require) => {
+    const React = require("react");   // 宿主提供，不用打包
+    function apply(ctx) {
+      ctx.slots.inject("plugins.bundle.config", () => ctx.slots.register(
+        { name: "plugins.bundle.config", key: "dsh-capability-router" }, Panel));
+      ctx.slots.inject("conversation.view", () => ctx.slots.register(
+        { name: "conversation.view", id: "capability-router", order: 40, label: () => "编排" }, Panel));
+    }
+    return { apply, inject: ["slots"] };
+  },
+});
+```
+
+两处 slot 里放的都是一个 iframe，指向 `/capability-router/panel`——不重复实现 UI，面板怎么改都不动壳。
+
+清单三件套（缺一个就加载不上）：
+
+```json
+"exports": { "./client": "./client/index.js" },
+"dsh": { "client": { "platform": "web" } }
+```
+
+`@deepseek-ai/dsh-client-modules` 的 `resolveMeta()` 要求 `dsh.client.platform === "web"` 且能解析到 `exports["./client"]`，否则抛 `declares dsh.client but exports no "./client" bundle`。
 
 ---
 

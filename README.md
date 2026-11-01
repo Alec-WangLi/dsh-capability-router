@@ -29,6 +29,7 @@
 | 缺口记账 | `gapLog` | 开 | 落空的原话记进 `gaps.jsonl`，用来决定下一个专家造什么 |
 | 长期原则段 | `intake` | 开 | 系统提示里的常驻背景，供长对话回看 |
 | 技能供给体检 | `npm run doctor` | — | 专家声明的技能装没装；`host` 源不查，缺必装退出码 1 |
+| 面板 | `web` | 开 | 宿主路由 `/capability-router/panel`；插件详情页与会话页「编排」tab 都嵌它 |
 | 项目模式 | `project` | 开 | 有会话状态时：状态卡取代检查点，缺口闭嘴 |
 | 运行记录 | `runs` | 开 | 每次 pre-step 一行写进 `runs.jsonl`（阶段、命中、注入了什么） |
 
@@ -53,7 +54,7 @@ DSH → 插件 → 添加插件 → 输入源码目录的绝对路径 → 重启
 ## 一屏用法
 
 ```bash
-npm test                  # 八套 62 个场景
+npm test                  # 十三套 91 个场景
 npm run check             # 语法检查
 npm run accept            # 匹配器验收集（a 回归 + b 口语）
 node tools/match.mjs --set c   # 泛化探针
@@ -116,12 +117,14 @@ lib/catalog.js    专家目录（系统提示段）+ expert(name) 工具定义
 lib/state.js      会话状态、阶段闸门、状态卡
 lib/panel.js      只读面板的数据层与渲染（HTML）
 lib/skills.js     技能目录扫描（doctor 与 panel 共用）
+lib/web.js        面板的宿主路由（/panel 与 /api/state）
 lib/router.js     规则匹配器：一句话判给哪个专家
 lib/gap.js        缺口判定与文案
 lib/doctor.js     技能供给检查（纯计算，不碰文件系统）
 lib/yaml.js       YAML 子集解析器（为了零依赖手写的）
 experts/<id>/     专家包：expert.yml + role.md，首批 7 个（含接单 intake、审查 review）
-test/             十二套 84 个场景
+client/index.js   浏览器半边：插件详情页与会话页各挂一个 iframe，无构建步骤
+test/             十三套 91 个场景
 tools/            match（验收）· doctor（体检）· panel（只读面板）· forge（造专家）· gaps（汇总）· dump-session（会话日志）
 docs/             功能说明 · 安装与排障
 DESIGN.md         设计取舍、宿主 API 实测、踩过的坑
@@ -148,4 +151,20 @@ node tools/dump-session.mjs ~/.dsh/sessions/<slug>/session-<id> --stats
 
 ## 状态
 
-v0.13.0。检查点的效果有 A/B 对照数据；专家路由、角色注入、缺口提示、缺口记账、造专家均已落地并有测试。按专家收窄技能目录（`narrow`）已在 v0.7.0 删除——它在真机上撞到宿主的作用域分层天花板，且服务错了对象（会话而非单条消息），下一版由专家编排取代；专家包升到 v2（`kind` / `handoff` / `deliverables` + 技能依赖声明），配 `npm run doctor` 供给体检。v0.9.0 起多了一个入口：专家目录常驻系统提示 + `expert(name)` 工具按需取详情——判断权从插件交回模型。v0.10.0 起加了项目模式：会话有阶段、闸门只提示、旧的三条提示协议在项目里让位给状态卡。v0.11.0 补齐入口与收口两个专家：接单把需求收敛成 `REQUIREMENTS.md` + `TASKS.md`，审查按同一份标准逐条核对。v0.12.0 补上 `npm run panel` 只读面板：会话阶段、最近 25 步、缺口队列、技能供给一屏看完。
+v0.14.0。按里程碑看：
+
+| 版本 | 内容 |
+|---|---|
+| v0.6.0 | 检查点（有 A/B 对照）、专家路由、角色注入、缺口提示与记账、造专家 |
+| v0.7.0 | 收窄（`narrow`）退役——它服务错了对象，且撞上宿主的作用域分层天花板 |
+| v0.8.0 | 专家包 v2（`kind` / `handoff` / `deliverables` + 技能依赖声明）+ `npm run doctor` 供给体检 |
+| v0.9.0 | 专家目录进系统提示 + `expert(name)` 工具：判断权从插件交回模型 |
+| v0.10.0 | 项目模式：会话阶段、提示级闸门、`runs.jsonl`；目录在场时旧的角色注入退场 |
+| v0.11.0 | 入口与收口两个专家：接单（`REQUIREMENTS.md` + `TASKS.md`）与审查（按同一份标准核对） |
+| v0.12.0 | `npm run panel` 只读面板：会话阶段 / 最近 25 步 / 缺口队列 / 技能供给 |
+| v0.13.0 | 匹配器 `multi`：跨领域不再硬选一个；匹配器彻底降级为提示 |
+| v0.14.0 | 面板挂上宿主路由，加 client 半边：插件详情页与会话页「编排」tab |
+
+下一步是真实项目跑一遍验收场景（视频监控：用户说两句 → 接单进 spec → 分派 → 审查收口），把「能跑到哪一步」摸清楚。
+
+已知限制见 [docs/FEATURES.md](./docs/FEATURES.md) 最后一节。

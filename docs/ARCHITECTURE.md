@@ -318,7 +318,7 @@ client 半边只有一层壳：tab 导航 + iframe(src = panel 地址)
 | 5 | ~~加 `intake`、`review` 两个专家包~~ **已完成 v0.11.0** | `npm test` 79 场景；匹配器 a/b 集 20/20 未回退 | 中，提示词要反复调 |
 | 6 | ~~`tools/panel.mjs` 只读面板~~ **已完成 v0.12.0** | `npm run panel` 打开三屏：会话阶段 / 最近 25 步 / 缺口队列 + 技能供给 | 低 |
 | 7 | ~~匹配器 `multi` 结论 + 降级为提示~~ **已完成 v0.13.0** | 跨领域句判 multi 且不指定专家；a/b 集仍 20/20 | 低 |
-| 8 | client 半边：`plugins.bundle.config` + `conversation.view` 两个 slot 的壳，iframe 嵌第 6 步的面板 | 插件详情页出现「能力路由」那块；会话页出现「编排」tab | 中，`package.json` 要加 `dsh.client` 与 `exports["./client"]`，改了要重装才生效 |
+| 8 | ~~client 半边：两个 slot 的壳，iframe 嵌面板~~ **已完成 v0.14.0** | 插件详情页出现面板；会话页多一个「编排」tab；面板走宿主路由 `/capability-router/panel` | 中，改了 `package.json`（`dsh.client` + `exports["./client"]`），要重启/重装生效 |
 
 顺序有依赖但不用一次做完：1、2 可以立刻做；3 是分水岭（第一次把决定权交出去）；4、5 决定验收场景能不能通；8 只做壳，随时可以弹回第 6 步的独立面板。
 
@@ -341,6 +341,6 @@ client 半边只有一层壳：tab 导航 + iframe(src = panel 地址)
 2. `ctx.tools.register` 注册的工具能否按会话/阶段动态启停；不能的话，闸门只能靠提示。
 3. 技能目录消息是否支持「推荐标记」；不支持就只能靠 `role.md` 里写技能路由。
 4. 工具输出版本里 `output.schema` 的约束风格（`required` 放在 property 里而不是数组里，见 `dsh-experimental-tool-worktree` 的写法，与标准 JSON Schema 不同）。
-5. **client 半边的 React 从哪来**：billion-context 的产物里是编译后的 `import_react.createElement`，源码里没留取用方式。要么宿主注入，要么打包自带。这决定第 8 步要不要引入构建步骤。
-6. **client 清单字段**：billion-context 写 `dsh.client.platform: "web"`，而 `dsh-cordis-client-runner` 头注释说的是「package.json 的 `dshClient` 声明」。两者可能是新旧两种写法，实现时以能加载的那个为准，别猜。
-7. **远程访问下的 iframe 地址**：宿主自己知不知道当前是从 loopback 还是远程打开的？知道就能免掉我们自己的 `remote_blocked` 判断。
+5. ~~client 半边的 React 从哪来~~ 已确认：bundle 的 `factory(require)` 里 `require("react")` 由宿主加载器提供，不需要打包、不需要构建步骤。
+6. ~~client 清单字段~~ 已确认：`@deepseek-ai/dsh-client-modules/lib/index.js:62-76` 只读 `pkg.dsh.client`（`platform`/`inject`/`external`/`immediately`），`dshClient` 是 runner 注释里的旧说法。
+7. ~~远程访问下的 iframe 地址~~ 已用同源相对路径解决：面板挂在宿主 Web 服务上（`ctx.inject(["webServer"], sub => sub.webServer.register({kind:"exact", path, handler}))`），iframe 用 `/capability-router/panel`，远程访问天然正确。
