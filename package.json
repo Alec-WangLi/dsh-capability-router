@@ -1,6 +1,6 @@
 {
   "name": "dsh-capability-router",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "让 agent 在动手之前先问清需求、再确认手上能力够不够；后续负责按任务收窄技能目录、按角色请专家。",
   "type": "module",
   "main": "lib/index.js",

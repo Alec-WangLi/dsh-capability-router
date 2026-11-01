@@ -64,6 +64,27 @@ const catalog = {
   assert.match(note, /一个专家包都没有/);
 }
 
+// 场景九：跨领域——指出涉及的专家，并指向接单专家
+{
+  const note = gapText(
+    {
+      kind: "multi",
+      candidates: [
+        { expert: { id: "backend", name: "后端工程师" }, score: 3.5 },
+        { expert: { id: "frontend", name: "前端工程师" }, score: 3 },
+        { expert: { id: "docs", name: "文档与写作" }, score: 2 },
+      ],
+    },
+    { experts: [] },
+    "做个系统，界面和接口都要，还要文档",
+  );
+  assert.match(note, /跨领域/);
+  assert.match(note, /后端工程师\(3\.5\)/);
+  assert.match(note, /expert\("intake"\)/);
+  assert.match(note, /别自己一个领域一个领域串着硬扛/);
+  assert.equal(gapText({ kind: "hit", expert: { id: "backend" } }, { experts: [] }, "x"), undefined, "命中仍然不说话");
+}
+
 console.log("场景一 任务判定      ✓");
 console.log("场景二 闲聊不打扰    ✓");
 console.log("场景三 命中不说话    ✓");
@@ -72,4 +93,5 @@ console.log("场景五 没人接        ✓");
 console.log("场景六 分不清        ✓");
 console.log("场景七 候选不足      ✓");
 console.log("场景八 空目录        ✓");
+console.log("场景九 跨领域        ✓");
 console.log("缺口提示测试通过");

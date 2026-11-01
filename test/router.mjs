@@ -83,6 +83,33 @@ const expert = (id, extra) => ({
   assert.equal(matchExpert("给我个方案", [e]).kind, "miss", "0.5 低于阈值");
 }
 
+// 场景十：跨领域——三个以上专家都明显过线，判 multi 而不是硬选一个
+{
+  const experts = [
+    expert("backend", { triggers: ["接口", "数据库"], description: "接口、数据模型" }),
+    expert("frontend", { triggers: ["界面", "页面"], description: "界面、交互" }),
+    expert("docs", { triggers: ["文档"], description: "文档、方案" }),
+    expert("data", { triggers: ["报表"], description: "表格、报表" }),
+  ];
+  const cross = matchExpert("做个系统，要界面、要接口、还要文档", experts);
+  assert.equal(cross.kind, "multi");
+  assert.ok(cross.candidates.length >= 3, "multi 要列出涉及的专家");
+  assert.equal(cross.expert, undefined, "multi 不该指定唯一个专家");
+
+  // 头名压倒性领先时仍判 hit：其它只是词面噪音
+  const dominant = matchExpert("接口和数据库的接口设计", experts);
+  assert.equal(dominant.kind, "hit");
+  assert.equal(dominant.expert.id, "backend");
+
+  // 只有两位明显过线时不判 multi：第三位只是描述里沾了个词（0.5，够不上阈值）
+  const weak = matchExpert("接口、界面、文档", [
+    expert("backend", { triggers: [], description: "接口" }),
+    expert("frontend", { triggers: ["界面"], description: "" }),
+    expert("docs", { triggers: ["文档"], description: "" }),
+  ]);
+  assert.notEqual(weak.kind, "multi", "第三位没到线就不该算跨领域");
+}
+
 console.log("场景一 权重上限      ✓");
 console.log("场景二 英文词边界    ✓");
 console.log("场景三 中文子串      ✓");
@@ -92,4 +119,5 @@ console.log("场景六 长词优先      ✓");
 console.log("场景七 ambiguous     ✓");
 console.log("场景八 miss          ✓");
 console.log("场景九 描述兜底      ✓");
+console.log("场景十 multi         ✓");
 console.log("匹配器测试通过");

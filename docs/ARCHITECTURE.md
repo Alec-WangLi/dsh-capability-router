@@ -317,7 +317,7 @@ client 半边只有一层壳：tab 导航 + iframe(src = panel 地址)
 | 4 | ~~会话状态 + 阶段闸门 + `runs.jsonl`~~ **已完成 v0.10.0** | 打开 `expert("intake")` 进 spec，之后每步只收状态卡 | 会话身份已确认：`payload.agent.id` === `agent.session.id` |
 | 5 | ~~加 `intake`、`review` 两个专家包~~ **已完成 v0.11.0** | `npm test` 79 场景；匹配器 a/b 集 20/20 未回退 | 中，提示词要反复调 |
 | 6 | ~~`tools/panel.mjs` 只读面板~~ **已完成 v0.12.0** | `npm run panel` 打开三屏：会话阶段 / 最近 25 步 / 缺口队列 + 技能供给 | 低 |
-| 7 | 匹配器 `multi` 结论 + 降级为提示 | 「视频监控」判成 multi 而不是 miss | 低 |
+| 7 | ~~匹配器 `multi` 结论 + 降级为提示~~ **已完成 v0.13.0** | 跨领域句判 multi 且不指定专家；a/b 集仍 20/20 | 低 |
 | 8 | client 半边：`plugins.bundle.config` + `conversation.view` 两个 slot 的壳，iframe 嵌第 6 步的面板 | 插件详情页出现「能力路由」那块；会话页出现「编排」tab | 中，`package.json` 要加 `dsh.client` 与 `exports["./client"]`，改了要重装才生效 |
 
 顺序有依赖但不用一次做完：1、2 可以立刻做；3 是分水岭（第一次把决定权交出去）；4、5 决定验收场景能不能通；8 只做壳，随时可以弹回第 6 步的独立面板。
