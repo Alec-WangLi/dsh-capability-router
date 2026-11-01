@@ -1,9 +1,9 @@
 # dsh-capability-router
 
-> 本机自研的 DSH 插件 · v0.6.0 · 零依赖
-> 告诉模型「这是个什么问题」再让它动手。
+> 本机自研的 DSH 插件 · v0.17.2 · 零依赖
+> 让 agent 先确认「这是个什么问题、手上能力够不够」，再动手。
 
-一句话：**在用户那句话后面加一条很短的提示，把「先归类、再动手」变成当轮动作**；顺带按领域把专家身份、技能目录和缺口记录管起来。
+一句话：**检查点贴在用户消息后面，专家目录常驻系统提示、`expert(name)` 按需取详情，项目阶段记在项目里而不是会话里。**
 
 ---
 
@@ -13,6 +13,7 @@
 
 1. **agent 拿到一句含糊的需求就直接开干**。用户说「这个功能为什么不生效」，它先跑十条命令再回答——因为它读不出这句话是「提问」还是「命令」。
 2. **技能装多了挑不准**。49 个技能的目录塞在上下文里，每次都得自己判断该用哪个。
+3. **多专家协作没有交接协议**。用户说「做个视频监控系统」，它要么自己硬扛，要么分不清该找谁、做到哪一步算完——没有需求文档、没有任务卡、没有阶段。
 
 做法不是加更多规则到系统提示里（那离用户那句话太远，中间隔着几十 KB 项目规则），而是**贴着用户消息注入**。
 
@@ -30,7 +31,8 @@
 | 长期原则段 | `intake` | 开 | 系统提示里的常驻背景，供长对话回看 |
 | 技能供给体检 | `npm run doctor` | — | 专家声明的技能装没装；`host` 源不查，缺必装退出码 1 |
 | 面板 | `web` | 开 | 宿主路由 `/capability-router/panel`；插件详情页与会话页「编排」tab 都嵌它 |
-| 项目模式 | `project` | 开 | 有会话状态时：状态卡取代检查点，缺口闭嘴 |
+| 项目模式 | `project` | 开 | 阶段记在项目里（`<项目>/.capability-router/state.json`），状态卡取代检查点，缺口闭嘴 |
+| 阶段推进 | `expert(id, {phase})` | — | 交卷时显式推进（`spec → build → review`）；只能往前走，允许跨格（多会话接手） |
 | 运行记录 | `runs` | 开 | 每次 pre-step 一行写进 `runs.jsonl`（阶段、命中、注入了什么） |
 
 细节、判据、代价都在 **[docs/FEATURES.md](./docs/FEATURES.md)**。
@@ -54,7 +56,7 @@ DSH → 插件 → 添加插件 → 输入源码目录的绝对路径 → 重启
 ## 一屏用法
 
 ```bash
-npm test                  # 十三套 91 个场景
+npm test                  # 十四套 100 个场景
 npm run check             # 语法检查
 npm run accept            # 匹配器验收集（a 回归 + b 口语）
 node tools/match.mjs --set c   # 泛化探针
@@ -105,6 +107,7 @@ node tools/forge.mjs rtsp --name 流媒体工程师 \
 2. **匹配是规则**：词表覆盖不到的说法会落空。落空会记账，攒够了再决定是补词表还是造专家。
 3. **注入不进会话历史**：只作用于当步上下文；事后回看会话看不到，只能查 `hints.jsonl`。
 4. **角色注入还没有 A/B**：检查点有对照数据（[DESIGN.md](./DESIGN.md) 第十节），角色注入目前只验证了「确实注入了」。
+5. **阶段要靠模型显式推进**：`spec → build` 没有可观察的事实（插件拿不到会话工作目录），模型不调 `expert(id, {phase})` 就会一直停在原阶段。
 
 ---
 
@@ -114,7 +117,7 @@ node tools/forge.mjs rtsp --name 流媒体工程师 \
 lib/index.js      插件本体：挂载、pre-step 路由、两处注入、自检技能
 lib/experts.js    专家包发现与校验（内层覆盖外层）
 lib/catalog.js    专家目录（系统提示段）+ expert(name) 工具定义
-lib/state.js      会话状态、阶段闸门、状态卡
+lib/state.js      项目级阶段、闸门、状态卡（会话文件只留指针）
 lib/panel.js      只读面板的数据层与渲染（HTML）
 lib/skills.js     技能目录扫描（doctor 与 panel 共用）
 lib/web.js        面板的宿主路由（/panel 与 /api/state）
@@ -124,9 +127,9 @@ lib/doctor.js     技能供给检查（纯计算，不碰文件系统）
 lib/yaml.js       YAML 子集解析器（为了零依赖手写的）
 experts/<id>/     专家包：expert.yml + role.md，首批 7 个（含接单 intake、审查 review）
 client/index.js   浏览器半边：插件详情页与会话页各挂一个 iframe，无构建步骤
-test/             十四套 99 个场景
+test/             十四套 100 个场景
 tools/            match（验收）· doctor（体检）· panel（只读面板）· forge（造专家）· gaps（汇总）· dump-session（会话日志）
-docs/             功能说明 · 安装与排障
+docs/             功能说明 · 架构 · 验收实录 · 安装与排障
 DESIGN.md         设计取舍、宿主 API 实测、踩过的坑
 ```
 
@@ -142,7 +145,7 @@ node tools/dump-session.mjs ~/.dsh/sessions/<slug>/session-<id> --stats
 
 | 文件 | 内容 |
 |---|---|
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | **下一版架构**：项目级专家编排、阶段闸门、GUI 落点、迁移路径（第 1 步已执行） |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | v2 架构：项目级专家编排、阶段闸门、GUI 落点；八步迁移路径（已全部落地） |
 | [docs/ACCEPTANCE.md](./docs/ACCEPTANCE.md) | **验收实录**：让插件自己跑一个视频监控项目，六轮流水、暴露的 5 个协议问题与修法、没验到的东西 |
 | [docs/FEATURES.md](./docs/FEATURES.md) | 每个能力的行为、判据、消息形状、数据文件、测试矩阵、限制 |
 | [docs/INSTALL.md](./docs/INSTALL.md) | 安装、挂载链路、验证、诊断、卸载、热重载的坑 |
@@ -152,7 +155,7 @@ node tools/dump-session.mjs ~/.dsh/sessions/<slug>/session-<id> --stats
 
 ## 状态
 
-v0.17.0。按里程碑看：
+v0.17.2。按里程碑看：
 
 | 版本 | 内容 |
 |---|---|
@@ -169,7 +172,10 @@ v0.17.0。按里程碑看：
 | v0.16.0 | 面板分范围：详情页看全部会话，会话页「编排」只看当前会话（`?session=`） |
 | v0.16.1–2 | 闸门提示按推进后的状态判；阶段允许跨格前进（新会话接手既有项目），拒绝时明确报错 |
 | v0.17.0 | 阶段改为**项目级**：`expert(id, {project})` 指定项目根，多个会话共用一个阶段 |
+| v0.17.1–2 | 项目状态文件标注清楚；同阶段推进改为幂等（重复交卷不再报错） |
 
-下一步是真实项目跑一遍验收场景（视频监控：用户说两句 → 接单进 spec → 分派 → 审查收口），把「能跑到哪一步」摸清楚。
+**已经真跑过一轮验收**：让插件自己接了「家庭四路视频监控」项目，从一句话走到接单专家出 `REQUIREMENTS.md`+`TASKS.md`、实现专家交 T1、审查专家按 A1–A12 收口（判「修完再交」，抓出 2 个 P0），修复后复核通过。全过程、暴露的 5 个协议问题与修法记在 **[docs/ACCEPTANCE.md](./docs/ACCEPTANCE.md)**。
+
+没验的是真实硬件条件下的动态条目（真实摄像头拉流、断电重启、7 天淘汰、手机首帧延迟…）——那要真机部署。
 
 已知限制见 [docs/FEATURES.md](./docs/FEATURES.md) 最后一节。
