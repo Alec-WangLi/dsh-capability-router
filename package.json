@@ -1,6 +1,6 @@
 {
   "name": "dsh-capability-router",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "让 agent 在动手之前先问清需求、再确认手上能力够不够；后续负责按任务收窄技能目录、按角色请专家。",
   "type": "module",
   "main": "lib/index.js",
@@ -19,8 +19,8 @@
     "DESIGN.md"
   ],
   "scripts": {
-    "test": "node test/smoke.mjs && node test/catalog.mjs && node test/experts.mjs && node test/router.mjs && node test/gap.mjs && node test/route.mjs && node test/forge.mjs && node test/doctor.mjs && node test/gaps.mjs",
-    "check": "node --check lib/index.js && node --check lib/experts.js && node --check lib/router.js && node --check lib/gap.js && node --check lib/yaml.js && node --check lib/doctor.js && node --check lib/catalog.js",
+    "test": "node test/smoke.mjs && node test/catalog.mjs && node test/experts.mjs && node test/router.mjs && node test/gap.mjs && node test/route.mjs && node test/forge.mjs && node test/state.mjs && node test/project.mjs && node test/doctor.mjs && node test/gaps.mjs",
+    "check": "node --check lib/index.js && node --check lib/experts.js && node --check lib/router.js && node --check lib/gap.js && node --check lib/yaml.js && node --check lib/doctor.js && node --check lib/catalog.js && node --check lib/state.js",
     "accept": "node tools/match.mjs",
     "gaps": "node tools/gaps.mjs",
     "doctor": "node tools/doctor.mjs"

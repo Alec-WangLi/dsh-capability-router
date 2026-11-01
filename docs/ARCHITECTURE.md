@@ -314,7 +314,7 @@ client 半边只有一层壳：tab 导航 + iframe(src = panel 地址)
 | 1 | ~~删 `narrow` 全套（代码、测试、配置、文档）~~ **已完成 v0.7.0** | 62 → 54 场景全绿 | 低，纯减法 |
 | 2 | ~~专家包 v2 字段 + `tools/doctor.mjs`~~ **已完成 v0.8.0** | `npm run doctor` 报出五个专家的依赖现状（host 源不查） | 低 |
 | 3 | ~~专家目录进系统提示 + `expert()` 工具~~ **已完成 v0.9.0** | `npm test` 68 场景；真机待验证「模型会自己调 `expert()`」 | 中，工具 schema 要对 |
-| 4 | 会话状态 + 阶段闸门 + `runs.jsonl` | 视频监控场景跑到 spec 阶段，状态卡正确 | 中，会话身份字段要确认 |
+| 4 | ~~会话状态 + 阶段闸门 + `runs.jsonl`~~ **已完成 v0.10.0** | 打开 `expert("intake")` 进 spec，之后每步只收状态卡 | 会话身份已确认：`payload.agent.id` === `agent.session.id` |
 | 5 | 加 `intake`、`review` 两个专家包 | 接单专家产出 `REQUIREMENTS.md` 与 `TASKS.md` | 中，提示词要反复调 |
 | 6 | `tools/panel.mjs` 只读面板 | 浏览器里能看到第 4 步的状态 | 低 |
 | 7 | 匹配器 `multi` 结论 + 降级为提示 | 「视频监控」判成 multi 而不是 miss | 低 |
@@ -337,7 +337,7 @@ client 半边只有一层壳：tab 导航 + iframe(src = panel 地址)
 
 ## 十二、未决问题（实现前要确认的宿主能力）
 
-1. `agent/pre-step` 的 `agent` 上取会话 id 的确切字段（`dsh-agent/lib/index.js:193` 附近）。
+1. ~~`agent/pre-step` 的 `agent` 上取会话 id 的确切字段~~ 已确认：`agent.id`，等于 `agent.session.id`（`dsh-agent/lib/index.js:513-514`）。
 2. `ctx.tools.register` 注册的工具能否按会话/阶段动态启停；不能的话，闸门只能靠提示。
 3. 技能目录消息是否支持「推荐标记」；不支持就只能靠 `role.md` 里写技能路由。
 4. 工具输出版本里 `output.schema` 的约束风格（`required` 放在 property 里而不是数组里，见 `dsh-experimental-tool-worktree` 的写法，与标准 JSON Schema 不同）。

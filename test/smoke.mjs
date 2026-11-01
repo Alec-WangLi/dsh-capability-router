@@ -186,7 +186,7 @@ fs.rmSync(tmpHome, { recursive: true, force: true });
 
 // 场景十：命中专家后注入 role.md，只注入一次
 const roleRun = createFakeContext();
-plugin.apply(roleRun.ctx, { hint: false, role: true, gap: false });
+plugin.apply(roleRun.ctx, { hint: false, role: true, gap: false, catalog: false });
 const roleHandler = roleRun.handlers.get("agent/pre-step");
 const frontendPrompt = [userMessage("prompt-role", "登录页的样式在窄屏下全乱了")];
 const roleDecision = await roleHandler({ messages: frontendPrompt }, async () => ({ kind: "continue", messages: frontendPrompt }));

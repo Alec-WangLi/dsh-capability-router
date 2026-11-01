@@ -103,7 +103,7 @@ function userMessage(id, text) {
 // 场景一：命中前端 → 注入角色消息，但一行都不碰技能目录
 {
   const { ctx, handlers, skills } = createFakeContext();
-  plugin.apply(ctx, { hint: false, role: true });
+  plugin.apply(ctx, { hint: false, role: true, catalog: false });
   const handler = handlers.get("agent/pre-step");
   const messages = [userMessage("p1", "登录页的样式在窄屏下全乱了")];
   const decision = await handler({ messages }, async () => ({ kind: "continue", messages }));
@@ -120,7 +120,7 @@ function userMessage(id, text) {
 // 场景二：换成另一个专家 → 注入对应的角色
 {
   const { ctx, handlers } = createFakeContext();
-  plugin.apply(ctx, { hint: false, role: true });
+  plugin.apply(ctx, { hint: false, role: true, catalog: false });
   const handler = handlers.get("agent/pre-step");
 
   const first = [userMessage("p2", "这个页面的样式不对")];
@@ -135,7 +135,7 @@ function userMessage(id, text) {
 // 场景三：匹配不到时不硬选，也不注入角色
 {
   const { ctx, handlers } = createFakeContext();
-  plugin.apply(ctx, { hint: false, role: true });
+  plugin.apply(ctx, { hint: false, role: true, catalog: false });
   const handler = handlers.get("agent/pre-step");
 
   const miss = [userMessage("p4", "今天中午吃什么")];

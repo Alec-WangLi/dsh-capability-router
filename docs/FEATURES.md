@@ -42,6 +42,7 @@ agent/pre-step（本插件在这里）
 | 缺口记账 | `gapLog` | 开 | — | `gaps.jsonl` |
 | 诊断记录 | `debug` | 关 | — | `trace.jsonl` |
 | 技能供给体检 | `npm run doctor` | — | — | — |
+| 项目模式（状态卡 / 闸门 / runs） | `project` `runs` | 开 | `capability-router-state` | `sessions/*.json` `runs.jsonl` |
 | 总开关 | `enabled` | 开 | — | — |
 
 `enabled: false` 时插件只挂一个空壳：不注入、不扫描、不挂钩，行为与未安装完全一致。
@@ -297,7 +298,59 @@ backend  后端工程师（worker）
 
 ---
 
-## 九、技能目录收窄（`narrow`，已删除）
+## 九、项目模式：会话状态、阶段闸门、`runs.jsonl`
+
+一个会话一旦「真开工」，三条协议会互相抢注意力：系统提示里的专家目录说「按阶段换人」、当轮检查点说「有黑洞问一句」、规则匹配器说「我替你选好了前端」。项目模式做的就是**让这三条只剩一条在说话**。
+
+### 阶段从哪来：只读事实，不猜
+
+| 动作 | 阶段变化 |
+|---|---|
+| 打开接单专家（`expert("intake")`，`kind: intake`） | `idle` → `spec` |
+| 打开实现类专家（`kind: worker`） | 不变（只记进「在场专家」） |
+| `build` 阶段打开审查专家（`kind: reviewer`） | `build` → `review` |
+
+状态按会话落盘：`<STATE_DIR>/sessions/<sessionId>.json`。会话 id 取 `payload.agent.id`——宿主里它等于 `agent.session.id`（`dsh-agent/lib/index.js:513-514` 有一处断言，可以直接信）。文件坏了、丢了、字段怪，都当作「空闲」，不让状态机把挂载搞崩。
+
+### 三个阶段各说一句话
+
+| 阶段 | 状态卡里的「下一步」 |
+|---|---|
+| `idle` | 普通对话；确认要开工后打开接单专家 |
+| `spec` | 把需求收敛成 `REQUIREMENTS.md` + `TASKS.md`，再交给实现的专家 |
+| `build` | 按任务卡推进；收口前交给审查专家 |
+| `review` | 按同一份验收标准逐条核对，通过才算完 |
+
+### 闸门是提示，不是拦截
+
+宿主没有工具级拦截钩子，所以闸门只在 `expert()` 的返回里追加一句 `note`：
+
+- `spec` 阶段打开 worker → 「需求还没确认（`REQUIREMENTS.md` 与 `TASKS.md` 未产出），先别开工」
+- `idle` 阶段打开 reviewer → 「还没有可审的东西」
+
+### 项目模式下自动降级的三个东西
+
+| 东西 | 项目模式下的行为 | 原因 |
+|---|---|---|
+| 当轮检查点（`hint`） | **不注入**，换成一行状态卡 | 状态卡已经说了该干什么，两条协议同时喊话会撕注意力 |
+| 缺口提示（`gap` / `gapLog`） | 不注入、不记账 | 阶段卡里有「下一步」，不需要再喊「没有干这个的人」 |
+| 规则角色注入（`role`） | 只要 `catalog` 开着就**不注入** | 目录已经把选人交回模型，再注入一份 `role.md` 是在唱反调（真机上观察到过：子代理在做「检查系统提示」，却收到【当前专家：后端工程师】） |
+
+后两条是**默认行为**，不是项目模式专属：目录（v2）在场时，v1 的规则角色注入整体退场。
+
+### `runs.jsonl`
+
+每步一行，用来回答「它刚才为什么这么干」：
+
+```json
+{"at":"2026-11-01T12:20:31.004Z","session":"b8aa5600-…","phase":"spec","promptId":"…","rout":"miss","expert":null,"injected":["capability-router-state"]}
+```
+
+只记判断，**不记原话**——原话在 `gaps.jsonl`，两件事分开看。64 KB 截断，与其它账本一致。
+
+---
+
+## 十、技能目录收窄（`narrow`，已删除）
 
 > **v0.7.0 已删除**：`lib/narrow.js`、`test/narrow.mjs`、配置项 `narrow` 与 `alwaysVisible` 全部移除，本节的代码描述只作历史记录。为什么删：①它服务错了对象——技能目录服务整个会话，不服务单条消息的裁决；②代价明确（目录全量重发、每个被覆盖技能一条重名告警）；③真机上只对插件层生效（49 → 41，只收 8 个）。替代方案见 [ARCHITECTURE 第六节](./ARCHITECTURE.md#六收窄narrow-退役)。
 
@@ -333,7 +386,7 @@ backend  后端工程师（worker）
 
 ---
 
-## 十、缺口记账（`gapLog`）与汇总
+## 十一、缺口记账（`gapLog`）与汇总
 
 每次「没人接」或「分不清」时，把原话记进 `<STATE_DIR>/gaps.jsonl`：
 
@@ -362,7 +415,7 @@ node tools/gaps.mjs --json   # 机读
 
 ---
 
-## 十一、造专家（`tools/forge.mjs`）
+## 十二、造专家（`tools/forge.mjs`）
 
 ```bash
 node tools/forge.mjs rtsp --name 流媒体工程师 \
@@ -391,7 +444,7 @@ node tools/forge.mjs rtsp --name 流媒体工程师 \
 
 ---
 
-## 十二、数据文件
+## 十三、数据文件
 
 都在 `<DSH_HOME>/capability-router/`（默认 `~/.dsh/capability-router/`）：
 
@@ -402,12 +455,14 @@ node tools/forge.mjs rtsp --name 流媒体工程师 \
 | `gaps.jsonl` | 每次落空一行（`at` / `kind` / `text` / `candidates`） | 落空且像派活时 | 同上 |
 | `trace.jsonl` | `debug: true` 时每次 pre-step 的现场 | 每步 | 同上 |
 | `experts/` | 用户自建或覆盖的专家包 | `tools/forge.mjs` | — |
+| `sessions/<id>.json` | 每个会话的阶段与在场专家 | 打开专家时 | — |
+| `runs.jsonl` | 每次 pre-step 的判断（会话 / 阶段 / 命中 / 注入了什么） | 每步 | 同上 |
 
 JSONL 追加是同步写、失败静默——记账失败不能影响注入。
 
 ---
 
-## 十三、与宿主的契约（实现必须知道的）
+## 十四、与宿主的契约（实现必须知道的）
 
 | 事实 | 出处 |
 |---|---|
@@ -422,7 +477,7 @@ JSONL 追加是同步写、失败静默——记账失败不能影响注入。
 
 ---
 
-## 十四、测试
+## 十五、测试
 
 ```bash
 npm test     # 八套 62 个场景，串行
@@ -436,6 +491,8 @@ npm run check # 六个源文件的语法检查
 | `test/experts.mjs` | 11 | YAML 子集（含流式映射）、扫描、校验、内层覆盖、v2 字段、老包兼容 |
 | `test/router.mjs` | 9 | 打分、三种结论、中英匹配边界 |
 | `test/gap.mjs` | 8 | 任务判定、三种文案出口 |
+| `test/state.mjs` | 6 | 文件名规整、读写、打开即推进、闸门、状态卡、怪状态 |
+| `test/project.mjs` | 5 | 集成：目录压制角色、状态卡取代检查点、runs 记账、工具推进状态、可关 |
 | `test/doctor.mjs` | 6 | 必装缺失、宿主自带不查、自带技能算数、可选只提示、文案 |
 | `test/route.mjs` | 5 | 集成：一句话进来后模型看到什么变了（含「路由不碰目录」） |
 | `test/forge.mjs` | 7 | 必填、id 规范、生成即可读、生成即可命中、覆盖确认 |
@@ -445,7 +502,7 @@ npm run check # 六个源文件的语法检查
 
 ---
 
-## 十五、已知限制
+## 十六、已知限制
 
 1. **技能只写名字、不校验供给**：专家的 `skills` 是引用，装没装、版本对不对要等人看（下一版补 `npm run doctor`）。
 2. **匹配是规则**：词表覆盖不到的说法会落空。落空的句子会被记账，用 `npm run gaps` 看高频缺口——那是补词表还是造专家的判断依据。
