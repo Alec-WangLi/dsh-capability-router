@@ -27,6 +27,7 @@
 | 缺口提示 | `gap` | 开 | 分不清说「哪两个在抢」，没人接说「没有干这个的人」；闲聊不打扰 |
 | 缺口记账 | `gapLog` | 开 | 落空的原话记进 `gaps.jsonl`，用来决定下一个专家造什么 |
 | 长期原则段 | `intake` | 开 | 系统提示里的常驻背景，供长对话回看 |
+| 技能供给体检 | `npm run doctor` | — | 专家声明的技能装没装；`host` 源不查，缺必装退出码 1 |
 
 细节、判据、代价都在 **[docs/FEATURES.md](./docs/FEATURES.md)**。
 
@@ -54,6 +55,7 @@ npm run check             # 语法检查
 npm run accept            # 匹配器验收集（a 回归 + b 口语）
 node tools/match.mjs --set c   # 泛化探针
 
+npm run doctor            # 专家的技能依赖装齐了没
 npm run gaps              # 哪个领域反复没人接
 node tools/gaps.mjs --json
 
@@ -90,7 +92,7 @@ node tools/forge.mjs rtsp --name 流媒体工程师 \
 
 ## 已知限制
 
-1. **技能只写名字、不校验供给**：专家的 `skills` 是引用，装没装、版本对不对目前要等人看（下一版补 `npm run doctor`）。
+1. **体检只查存在性**：`npm run doctor` 数得出技能在不在，查不了版本，也判断不了质量。`host` 源的依赖一律放行。
 2. **匹配是规则**：词表覆盖不到的说法会落空。落空会记账，攒够了再决定是补词表还是造专家。
 3. **注入不进会话历史**：只作用于当步上下文；事后回看会话看不到，只能查 `hints.jsonl`。
 4. **角色注入还没有 A/B**：检查点有对照数据（[DESIGN.md](./DESIGN.md) 第十节），角色注入目前只验证了「确实注入了」。
@@ -104,10 +106,11 @@ lib/index.js      插件本体：挂载、pre-step 路由、两处注入、自�
 lib/experts.js    专家包发现与校验（内层覆盖外层）
 lib/router.js     规则匹配器：一句话判给哪个专家
 lib/gap.js        缺口判定与文案
+lib/doctor.js     技能供给检查（纯计算，不碰文件系统）
 lib/yaml.js       YAML 子集解析器（为了零依赖手写的）
 experts/<id>/     专家包：expert.yml + role.md，首批 5 个
-test/             七套 54 个场景
-tools/            match（验收）· forge（造专家）· gaps（缺口汇总）· dump-session（会话日志 dump）
+test/             八套 62 个场景
+tools/            match（验收）· doctor（供给体检）· forge（造专家）· gaps（缺口汇总）· dump-session（会话日志 dump）
 docs/             功能说明 · 安装与排障
 DESIGN.md         设计取舍、宿主 API 实测、踩过的坑
 ```
@@ -133,4 +136,4 @@ node tools/dump-session.mjs ~/.dsh/sessions/<slug>/session-<id> --stats
 
 ## 状态
 
-v0.7.0。检查点的效果有 A/B 对照数据；专家路由、角色注入、缺口提示、缺口记账、造专家均已落地并有测试。按专家收窄技能目录（`narrow`）已在 v0.7.0 删除——它在真机上撞到宿主的作用域分层天花板，且服务错了对象（会话而非单条消息），下一版由专家编排取代。
+v0.8.0。检查点的效果有 A/B 对照数据；专家路由、角色注入、缺口提示、缺口记账、造专家均已落地并有测试。按专家收窄技能目录（`narrow`）已在 v0.7.0 删除——它在真机上撞到宿主的作用域分层天花板，且服务错了对象（会话而非单条消息），下一版由专家编排取代；专家包升到 v2（`kind` / `handoff` / `deliverables` + 技能依赖声明），配 `npm run doctor` 供给体检。

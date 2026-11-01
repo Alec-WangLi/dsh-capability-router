@@ -40,6 +40,7 @@ agent/pre-step（本插件在这里）
 | 缺口提示 | `gap` | 开 | `capability-router-gap` | — |
 | 缺口记账 | `gapLog` | 开 | — | `gaps.jsonl` |
 | 诊断记录 | `debug` | 关 | — | `trace.jsonl` |
+| 技能供给体检 | `npm run doctor` | — | — | — |
 | 总开关 | `enabled` | 开 | — | — |
 
 `enabled: false` 时插件只挂一个空壳：不注入、不扫描、不挂钩，行为与未安装完全一致。
@@ -199,7 +200,70 @@ b 集有三句曾判「不一致」，复核后是期望写错了、程序判得
 
 ---
 
-## 八、技能目录收窄（`narrow`，已删除）
+## 八、专家包 v2 与技能供给体检
+
+### v2 字段
+
+`expert.yml` 在 v1 之上加了三个元数据，并把 `skills` 从「名字数组」升级成「依赖声明」：
+
+| 字段 | 取值 | 作用 |
+|---|---|---|
+| `kind` | `intake` / `worker` / `reviewer` | 名字决定行为：接单的先出文档，审查的按验收标准收口。缺省 `worker`；写错只告警、按 `worker` 处理 |
+| `handoff` | 专家 id 列表 | 我通常把活交给谁，只作提示，不强制 |
+| `deliverables` | 文件名列表 | 我该产出什么，审查专家按同一份清单验收 |
+| `skills` | 依赖声明列表 | 每项 `{name, required, source}`，见下 |
+
+写法（YAML 子集只支持一层流式映射，所以一条依赖写一行）：
+
+```yaml
+kind: worker
+handoff: [frontend, review]
+deliverables: [接口定义, 数据模型]
+skills:
+  - {name: codebase-design, required: true, source: local}
+  - {name: writing-plans, required: false, source: host}
+```
+
+`source` 的三种取值，决定体检怎么对待它：
+
+| source | 含义 | doctor 怎么处理 |
+|---|---|---|
+| `host` | 跟着 DSH 一起装的（office / pdf / playwright 这类） | **不查**：用户目录里没有，但一定存在，查了就是假红 |
+| `local` | 装在 `~/.dsh/skills/<name>/SKILL.md` | 逐个数，缺了报红 |
+| `unknown` | 老写法 `skills: [pdf]` 的默认值 | 按缺失报出来，逼着标注来源 |
+
+老包不用改：`skills: [a, b]` 仍然能读，等价于「两项、非必装、来源不明」。
+
+### 技能供给体检：`npm run doctor`
+
+```text
+$ npm run doctor
+技能供给检查：专家 5 个，已装技能 29 个
+
+backend  后端工程师（worker）
+  ✓ codebase-design                    必装  local
+  ✓ domain-modeling                    必装  local
+  ✓ test-driven-development            必装  宿主自带
+  ✓ research                           可选  local
+  常交给：frontend、review
+  该产出：接口定义、数据模型、迁移脚本
+...
+必装技能都有着落。
+```
+
+- `--json` 给机器读；`--dir <绝对路径>` 额外扫一个技能目录（默认只扫 `<DSH_HOME>/skills`）
+- **退出码**：0 必装齐全；1 有必装缺席；2 参数错
+- 同一个技能被多个专家声明为必装、又都没装时，只报一次
+
+### 这条命令明确不做什么
+
+- **不装技能、不打包技能**。技能源码永不进本插件——别人的技能一直在更新，内置就吃不到新特性。装由用户或 Agent 自己的技能管理负责。
+- **不查版本**。宿主的技能目录不带版本号，查了也只能编。
+- **不阻断加载**。专家包声明了没装的技能，插件照常工作，只是这个专家的角色提示词会少一块实际能力——所以体检要能随时跑，而不是挂在安装流程里。
+
+---
+
+## 九、技能目录收窄（`narrow`，已删除）
 
 > **v0.7.0 已删除**：`lib/narrow.js`、`test/narrow.mjs`、配置项 `narrow` 与 `alwaysVisible` 全部移除，本节的代码描述只作历史记录。为什么删：①它服务错了对象——技能目录服务整个会话，不服务单条消息的裁决；②代价明确（目录全量重发、每个被覆盖技能一条重名告警）；③真机上只对插件层生效（49 → 41，只收 8 个）。替代方案见 [ARCHITECTURE 第六节](./ARCHITECTURE.md#六收窄narrow-退役)。
 
@@ -235,7 +299,7 @@ b 集有三句曾判「不一致」，复核后是期望写错了、程序判得
 
 ---
 
-## 九、缺口记账（`gapLog`）与汇总
+## 十、缺口记账（`gapLog`）与汇总
 
 每次「没人接」或「分不清」时，把原话记进 `<STATE_DIR>/gaps.jsonl`：
 
@@ -264,7 +328,7 @@ node tools/gaps.mjs --json   # 机读
 
 ---
 
-## 十、造专家（`tools/forge.mjs`）
+## 十一、造专家（`tools/forge.mjs`）
 
 ```bash
 node tools/forge.mjs rtsp --name 流媒体工程师 \
@@ -293,7 +357,7 @@ node tools/forge.mjs rtsp --name 流媒体工程师 \
 
 ---
 
-## 十一、数据文件
+## 十二、数据文件
 
 都在 `<DSH_HOME>/capability-router/`（默认 `~/.dsh/capability-router/`）：
 
@@ -309,7 +373,7 @@ JSONL 追加是同步写、失败静默——记账失败不能影响注入。
 
 ---
 
-## 十二、与宿主的契约（实现必须知道的）
+## 十三、与宿主的契约（实现必须知道的）
 
 | 事实 | 出处 |
 |---|---|
@@ -324,7 +388,7 @@ JSONL 追加是同步写、失败静默——记账失败不能影响注入。
 
 ---
 
-## 十三、测试
+## 十四、测试
 
 ```bash
 npm test     # 八套 62 个场景，串行
@@ -334,9 +398,10 @@ npm run check # 六个源文件的语法检查
 | 套件 | 场景 | 覆盖 |
 |---|---|---|
 | `test/smoke.mjs` | 12 | 注入、去重、透传、开关组合、角色、缺口、记账 |
-| `test/experts.mjs` | 9 | YAML 子集、扫描、校验、内层覆盖 |
+| `test/experts.mjs` | 11 | YAML 子集（含流式映射）、扫描、校验、内层覆盖、v2 字段、老包兼容 |
 | `test/router.mjs` | 9 | 打分、三种结论、中英匹配边界 |
 | `test/gap.mjs` | 8 | 任务判定、三种文案出口 |
+| `test/doctor.mjs` | 6 | 必装缺失、宿主自带不查、自带技能算数、可选只提示、文案 |
 | `test/route.mjs` | 5 | 集成：一句话进来后模型看到什么变了（含「路由不碰目录」） |
 | `test/forge.mjs` | 7 | 必填、id 规范、生成即可读、生成即可命中、覆盖确认 |
 | `test/gaps.mjs` | 4 | 合并计数、坏行容错、机读输出 |
@@ -345,7 +410,7 @@ npm run check # 六个源文件的语法检查
 
 ---
 
-## 十四、已知限制
+## 十五、已知限制
 
 1. **技能只写名字、不校验供给**：专家的 `skills` 是引用，装没装、版本对不对要等人看（下一版补 `npm run doctor`）。
 2. **匹配是规则**：词表覆盖不到的说法会落空。落空的句子会被记账，用 `npm run gaps` 看高频缺口——那是补词表还是造专家的判断依据。

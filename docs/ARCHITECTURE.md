@@ -152,18 +152,16 @@ deliver   交付清单
 ```yaml
 name: 接单专家
 description: 把模糊需求收敛成需求文档与任务卡，并分派给其他专家
-role: intake                 # intake | worker | reviewer（默认 worker）
+kind: intake                            # intake | worker | reviewer（默认 worker）
 triggers: [做个, 开发, 搭建, 实现, 需求, 项目]
 handoff: [backend, frontend, review]    # 我通常把活交给谁
 deliverables: [REQUIREMENTS.md, TASKS.md]
-skills:
-  - name: brainstorming
-    required: true
-    source: local             # local | agentskill | github
-  - name: writing-plans
-    required: false
-    source: local
+skills:                                 # 一条依赖写一行：YAML 子集只支持一层流式映射
+  - {name: doc-coauthoring, required: true, source: local}
+  - {name: writing-plans, required: false, source: host}
 ```
+
+`source` 取 `host`（跟着 DSH 装，体检不查）/ `local`（`~/.dsh/skills`，逐个数）/ `unknown`（老写法默认值，按缺失报）。
 
 `skills` 从「字符串数组」变成「依赖声明」：
 
@@ -314,7 +312,7 @@ client 半边只有一层壳：tab 导航 + iframe(src = panel 地址)
 | 步 | 内容 | 验证方式 | 风险 |
 |---|---|---|---|
 | 1 | ~~删 `narrow` 全套（代码、测试、配置、文档）~~ **已完成 v0.7.0** | 62 → 54 场景全绿 | 低，纯减法 |
-| 2 | 专家包 v2 字段 + `tools/doctor.mjs` | `npm run doctor` 报出五个专家的依赖缺口 | 低 |
+| 2 | ~~专家包 v2 字段 + `tools/doctor.mjs`~~ **已完成 v0.8.0** | `npm run doctor` 报出五个专家的依赖现状（host 源不查） | 低 |
 | 3 | 专家目录进系统提示 + `expert()` 工具 | 发一句领域话，模型自己调 `expert("backend")` | 中，工具 schema 要对 |
 | 4 | 会话状态 + 阶段闸门 + `runs.jsonl` | 视频监控场景跑到 spec 阶段，状态卡正确 | 中，会话身份字段要确认 |
 | 5 | 加 `intake`、`review` 两个专家包 | 接单专家产出 `REQUIREMENTS.md` 与 `TASKS.md` | 中，提示词要反复调 |
@@ -331,7 +329,7 @@ client 半边只有一层壳：tab 导航 + iframe(src = panel 地址)
 - `lib/narrow.js` 全部、`test/narrow.mjs` 全部
 - `lib/index.js` 里 `pre-step` 的裁决分支（`match()` 结果直接决定注入什么）
 - 配置项 `narrow`
-- 文档里所有「按专家收窄」的表述（README 限制段、FEATURES 第八节、DESIGN 六.2）
+- 文档里所有「按专家收窄」的表述（README 限制段、FEATURES 第九节、DESIGN 六.2）
 
 **保留**：`expert.yml`/`role.md` 双文件、`lib/yaml.js`、`lib/experts.js`、`lib/router.js`（降级使用）、`gaps.jsonl` 与 `tools/gaps.mjs`、`tools/forge.mjs`、自检技能。
 

@@ -112,6 +112,56 @@ function writeExpert(root, id, yaml, role) {
   assert.deepEqual(toStringList([" a ", ""]), ["a"]);
 }
 
+// 场景十：v2 字段——kind / handoff / deliverables / 技能依赖声明
+{
+  const dir = writeExpert(
+    tmpDir,
+    "intake-v2",
+    [
+      "name: 接单专家",
+      "description: 把模糊需求收敛成需求文档与任务卡",
+      "kind: intake",
+      "triggers: [做个, 开发, 搭建]",
+      "handoff: [backend, frontend, review]",
+      "deliverables: [REQUIREMENTS.md, TASKS.md]",
+      "skills:",
+      "  - {name: doc-coauthoring, required: true, source: local}",
+      "  - {name: office-xlsx, required: false, source: host}",
+    ].join("\n"),
+    "# 接单专家\n",
+  );
+  const { expert, warnings } = loadExpert(dir);
+  assert.equal(expert.kind, "intake");
+  assert.deepEqual(expert.handoff, ["backend", "frontend", "review"]);
+  assert.deepEqual(expert.deliverables, ["REQUIREMENTS.md", "TASKS.md"]);
+  assert.deepEqual(expert.skills, ["doc-coauthoring", "office-xlsx"], "v1 视图仍然是名字数组");
+  assert.deepEqual(expert.skillDeps[0], { name: "doc-coauthoring", required: true, source: "local" });
+  assert.equal(expert.skillDeps[1].required, false);
+  assert.equal(expert.skillDeps[1].source, "host");
+  assert.deepEqual(warnings, []);
+}
+
+// 场景十一：老写法照旧能读；kind 写错只告警、按 worker 处理
+{
+  const dir = writeExpert(
+    tmpDir,
+    "legacy-v1",
+    ["name: 老专家", "description: 只有 v1 字段", "kind: 项目经理", "triggers: [老]"].join("\n"),
+    "",
+  );
+  const { expert, warnings } = loadExpert(dir);
+  assert.equal(expert.kind, "worker", "非法 kind 回落到 worker");
+  assert.match(warnings.join(";"), /kind 只能是/);
+  assert.deepEqual(expert.skillDeps, [], "没写 skills 就是没有依赖");
+
+  const legacy = writeExpert(tmpDir, "legacy-skills", ["name: 老技能", "description: 字符串写法", "triggers: [老]", "skills: [pdf, office]"].join("\n"));
+  const loaded = loadExpert(legacy).expert;
+  assert.deepEqual(loaded.skillDeps, [
+    { name: "pdf", required: false, source: "unknown" },
+    { name: "office", required: false, source: "unknown" },
+  ]);
+}
+
 fs.rmSync(tmpDir, { recursive: true, force: true });
 
 console.log("场景一 行内列表      ✓");
@@ -123,4 +173,6 @@ console.log("场景六 未知字段告警  ✓");
 console.log("场景七 五个专家      ✓");
 console.log("场景八 覆盖与坏包    ✓");
 console.log("场景九 toStringList  ✓");
+console.log("场景十 v2 字段      ✓");
+console.log("场景十一 老包兼容    ✓");
 console.log("专家包测试通过");

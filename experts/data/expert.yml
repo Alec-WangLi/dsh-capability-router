@@ -2,5 +2,14 @@ name: 数据与办公
 description: 表格、报表、演示文稿、PDF 与数据整理
 triggers: [表格, Excel, 数据, 统计, 报表, PPT, 幻灯片, PDF, 图表, 汇总, 清洗, 透视, 格式转换]
 synonyms: [表, 表格, 报告, 报表, 汇总, 明细, 清洗, 透视, 图表, 报价单, 发票]
-skills: [office, office-xlsx, office-docx, office-pptx, office-recalculate, pdf]
+kind: worker
+handoff: [docs, review]
+deliverables: [报表文件, 整理后的数据]
+skills:
+  - {name: office, required: true, source: host}
+  - {name: office-xlsx, required: true, source: host}
+  - {name: pdf, required: true, source: host}
+  - {name: office-docx, required: false, source: host}
+  - {name: office-pptx, required: false, source: host}
+  - {name: office-recalculate, required: false, source: host}
 tools: []
