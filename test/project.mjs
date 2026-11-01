@@ -136,6 +136,33 @@ async function step(handler, agentId, messages) {
   assert.equal(after.phase, "review", "被拒绝的推进不该改状态（此时已推进到 review）");
 }
 
+// 场景七：项目级状态——两个会话接手同一个项目，共用一个阶段
+{
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-proj-"));
+  const { ctx, tools, handlers } = createFakeContext();
+  plugin.apply(ctx, {});
+
+  const tool = tools.find((definition) => definition.name === "expert");
+  const a = await tool.execute({ name: "intake", project: projectDir }, { agent: { id: "sess-A" } });
+  assert.equal(a.found, true);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(projectDir, ".capability-router", "state.json"), "utf8")).phase, "spec");
+
+  // 第二个会话接手：只给项目路径，阶段应直接看到 spec，并被闸门提醒「先别开工」
+  const b = await tool.execute({ name: "backend", project: projectDir }, { agent: { id: "sess-B" } });
+  assert.match(b.note ?? "", /需求还没确认/, "接手方要看得到项目当前阶段");
+
+  const sessionB = JSON.parse(fs.readFileSync(path.join(STATE_DIR, "sessions", "sess-B.json"), "utf8"));
+  assert.equal(sessionB.project, projectDir, "会话文件里要留项目指针");
+  assert.equal(sessionB.phase, "spec", "阶段镜像与项目一致");
+
+  // 会话 B 的 pre-step 应直接进入项目模式
+  const handler = handlers.get("agent/pre-step");
+  const messages = [userMessage("p7", "继续")];
+  const decision = await handler({ agent: { id: "sess-B" }, messages }, async () => ({ kind: "continue", messages }));
+  const injected = decision.messages.filter((message) => message.source?.kind !== "user");
+  assert.deepEqual(injected.map((message) => message.source?.kind), ["capability-router-state"], "项目阶段要能跨会话生效");
+}
+
 // 场景五：关掉 project 就当没有状态——检查点回来
 {
   const { ctx, handlers } = createFakeContext();
@@ -156,4 +183,5 @@ console.log("场景三 runs 记账       ✓");
 console.log("场景四 工具推进状态    ✓");
 console.log("场景五 project 可关    ✓");
 console.log("场景六 显式交卷        ✓");
+console.log("场景七 项目级阶段      ✓");
 console.log("项目模式测试通过");
