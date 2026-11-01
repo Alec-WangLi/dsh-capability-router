@@ -1,0 +1,27 @@
+# 依赖
+node_modules/
+
+# 运行时状态（由插件写在 $DSH_HOME/capability-router/，不该进仓库）
+state/
+config.json
+hints.jsonl
+trace.jsonl
+experts/*/skills/
+
+# 备份与临时文件
+*.bak
+*.bak-*
+*.log
+*.tmp
+_*
+
+# 会话 dump 产物
+*.zstd
+dump.jsonl
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
