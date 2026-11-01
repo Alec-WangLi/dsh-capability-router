@@ -88,6 +88,10 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-state-"));
   assert.equal(built.state.phase, "build");
   assert.equal(advancePhase(built.state, "review").state.phase, "review");
 
+  const same = advancePhase(built.state, "build");
+  assert.equal(same.changed, false);
+  assert.equal(same.error, undefined, "已经在该阶段时不该报错（幂等）");
+
   const back = advancePhase(built.state, "spec");
   assert.equal(back.changed, false);
   assert.match(back.error, /只能往前走/);
