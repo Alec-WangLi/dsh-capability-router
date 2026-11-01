@@ -3,7 +3,9 @@
 > 这份文档是给未来的自己看的。上下文会被压缩，记忆会失真，但文件不会。
 > 任何一次开工之前，先读这里，再读 `README.md`（那是给用户看的用法）。
 >
-> 最后更新：2026-11-01
+> 文档分工：`README.md` 门面 · `docs/FEATURES.md` 功能与判据 · `docs/INSTALL.md` 安装与排障 · 本文件设计与宿主实测
+>
+> 最后更新：2026-11-01（v0.6.0）
 
 ---
 
@@ -269,6 +271,20 @@ LLM 只在两处各用一次：**首轮需求画像**、**能力缺口判断**�
 2. **逃生口**：匹配落空（miss / ambiguous）时立刻 `clear()`，目录恢复完整。不需要用户记命令。
 3. **代价写在明面上**：宿主每丢弃一个同名候选就打一条 `ignored because a higher-priority skill already exists` 告警，且目录要全量重发。告警只在目录缓存失效时出现（不是每步），但切专家那一刻会有 N 条（N = 被收起的技能数）。所以 `narrow` 默认关闭，要显式打开。
 
+#### 实机结论：只对全局层生效（2026-11-01）
+
+真机跑了一遍（49 个技能，命中 `frontend` 后应该只剩 5 个）：**只有 8 个被真正收起**——插件自带的 `office ×7` 与 `diagnose-windows-sandbox-acl`；用户目录下的 29 个技能纹丝不动。
+
+原因在宿主的层语义，不在参数：
+
+- `registerProvider` 把 provider 注册进**调用方所在的作用域层**（`dsh-skill/lib/index.js:147-178`，`this.layers.effect(this.ctx, …)`）。
+- 读目录时 `collectFresh` 按 `[global, ...scope chain]` 合并，**靠后的层覆盖同名条目**（`:298-310`）。
+- 本插件挂在 profile 上，`scopeOf(ctx)` 是空 → 只能写全局层，因此压不过作用域层里的同名技能。
+
+`rank: -1` 只在**同一层内**决定同名胜负（`compareIndexedCandidates`，`:519-521`），跨层无效。
+
+处置：`narrow` 保持默认关，文档按「只收插件层技能」表述；真要按专家收窄用户技能，得让 provider 落到读目录的那个作用域层里——profile 挂载点做不到，需要宿主提供作用域挂载或目录过滤钩子。
+
 ### 3. 目录变更次数克制
 
 技能目录消息是**全量替换**的（见第七节 digest 机制）。每变一次，prefix cache 重算一次。
@@ -452,39 +468,55 @@ ctx.on('system-prompt/assemble', async (_assembly, context, next) => { ... })
 
 ---
 
-## 九、当前实现（v0.3.0）
-
-`lib/index.js` 结构：
+## 九、当前实现（v0.6.0）
 
 ```text
-常量        DSH_HOME / STATE_DIR / CONFIG_FILE / HINT_KIND / DEFAULTS
-文案        INTAKE_TEXT（系统提示原则段，约 200 字）
-            HINT_TEXT（当轮检查点，约 190 字）
-函数        readConfig / saveConfig
-            lastUserPrompt（倒序找 source.kind === "user"）
-            hasHintFor / markHinted / hintedPrompts
-            hintMessage / recordHint / recordTrace
-            describeState / selfSkillContent / selfSkill
-apply()     if (!enabled) return
-            if (debug) recordTrace({event:"apply"})
-            if (intake) ctx.effect(() => ctx.systemPrompt.section(...))
-            if (hint)   ctx.on("agent/pre-step", ...)
-            ctx.effect(() => ctx.skills.register(selfSkill(...)))
+lib/index.js   542 行  挂载、pre-step 路由与三处注入、自检技能、账本与落盘
+lib/experts.js 150 行  专家包发现与校验（内层覆盖外层，坏包不静默回退）
+lib/router.js  119 行  规则匹配：打分、三种结论
+lib/narrow.js  147 行  冒名接管收窄（只对插件层生效，默认关）
+lib/gap.js      58 行  任务判定与缺口文案
+lib/yaml.js    121 行  YAML 子集解析
 ```
 
-配置项（`~/.dsh/capability-router/config.json`）：
+`apply()`：
+
+```text
+if (!enabled) return
+if (debug) recordTrace({event:"apply"})
+if (intake) ctx.effect(() => ctx.systemPrompt.section(...))
+ctx.effect(() => ctx.skills.register(selfSkill(...)))     // 自检技能，总是注册
+if (experts) catalog = loadAllExperts()
+ctx.on("agent/pre-step", async (payload, next) => {
+  const decision = (await next()) ?? payload           // 瀑布：先拿上游结论
+  const msg = lastUserPrompt(decision, payload)        // source.kind === "user"
+  if (!msg) return
+  if (hint) 追加 HINT_TEXT（forPrompt + hintedPrompts 去重，记 hints.jsonl）
+  if (experts) verdict = match(catalog, text)
+  if (role && verdict.kind === "hit") 追加 role.md（rolePrompts 去重）
+  if (gap) 另起一条缺口消息（miss 需过 looksLikeTask 闸门）
+  if (gapLog) appendLedger(gaps.jsonl, …)              // 与「开不开口」同一判据
+  if (narrow) applyNarrowing(verdict)                  // 目录下一步才生效
+})
+```
+
+配置项（`~/.dsh/capability-router/config.json`，缺省取 `DEFAULTS`）：
 
 | 字段 | 默认 | 作用 |
 |---|---|---|
-| `enabled` | true | 总开关 |
+| `enabled` | true | 总开关，关掉等同未安装 |
 | `intake` | true | 系统提示原则段 |
 | `hint` | true | 当轮检查点 |
-| `narrow` | false | **占位，未实现** |
-| `activeGroups` | [] | **占位，未实现** |
-| `groups` | {} | **占位，未实现** |
-| `hidden` | [] | **占位，未实现** |
+| `experts` | true | 扫描专家包、启用匹配器 |
+| `role` | true | 命中后注入 `role.md` |
+| `gap` | true | 落空时提示一句（闲聊不触发） |
+| `gapLog` | true | 落空记账到 `gaps.jsonl` |
+| `narrow` | false | 按专家收窄技能目录（见六.2 实机结论） |
+| `alwaysVisible` | [] | 跨领域技能白名单，不收窄 |
 | `order` | 5000 | 原则段排序位（purge 尾段在 5100） |
 | `debug` | false | 写 `trace.jsonl` |
+
+v0.2.0 的 `groups` / `activeGroups` / `hidden` 已删除：分组方案被专家包取代（见第二节）。
 
 ### 当前检查点文案（v0.2.0，已验证有效但已判定要改）
 
