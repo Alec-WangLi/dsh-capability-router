@@ -69,7 +69,8 @@ process.env.DSH_HOME = TEST_HOME;
 const plugin = await import("../lib/index.js");
 const { ctx, handlers, sections, skills, logs } = createFakeContext();
 
-plugin.apply(ctx, {});
+// 本文件只测检查点，关掉角色注入让断言数与文案保持稳定；角色注入单独在场景十测。
+plugin.apply(ctx, { role: false });
 assert.deepEqual(logs, [], `挂载过程不应有告警：${logs.join(" | ")}`);
 assert.equal(sections.length, 1, "应注册一段系统提示原则");
 assert.equal(sections[0].name, "capability-intake");
@@ -127,7 +128,7 @@ assert.equal(rejected.messages, undefined, "reject 分支不应带 messages");
 
 // 场景六：关掉 hint → 不再挂钩
 const off = createFakeContext();
-plugin.apply(off.ctx, { hint: false });
+plugin.apply(off.ctx, { hint: false, role: false });
 assert.equal(off.handlers.has("agent/pre-step"), false, "hint:false 时不应挂钩");
 assert.equal(off.sections.length, 1, "原则段仍应注册");
 
@@ -141,7 +142,7 @@ assert.equal(disabled.handlers.size, 0);
 // 场景九：messages 里看不到历史注入（agent loop 每步重建上下文时的常见情形），
 // 同一个 agent 连跑五步也只应注入一次——靠 WeakMap 兜底，不靠 messages 内容
 const loopRun = createFakeContext();
-plugin.apply(loopRun.ctx, {});
+plugin.apply(loopRun.ctx, { role: false });
 const loopHandler = loopRun.handlers.get("agent/pre-step");
 const agent = { id: "agent-9" };
 const stable = [userMessage("prompt-9", "换个思路再做一遍")];
@@ -180,6 +181,22 @@ assert.equal(written.intake, false);
 assert.equal(written.hint, true, "未指定的字段应落到默认值");
 fs.rmSync(tmpHome, { recursive: true, force: true });
 
+// 场景十：命中专家后注入 role.md，只注入一次
+const roleRun = createFakeContext();
+plugin.apply(roleRun.ctx, { hint: false, role: true });
+const roleHandler = roleRun.handlers.get("agent/pre-step");
+const frontendPrompt = [userMessage("prompt-role", "登录页的样式在窄屏下全乱了")];
+const roleDecision = await roleHandler({ messages: frontendPrompt }, async () => ({ kind: "continue", messages: frontendPrompt }));
+assert.equal(roleDecision.messages.length, 2, "命中专家应追加一条角色消息");
+const roleMsg = roleDecision.messages[1];
+assert.equal(roleMsg.source.kind, "capability-router-role");
+assert.equal(roleMsg.source.expert, "frontend");
+assert.ok(roleMsg.content[0].text.includes("前端工程师"));
+const roleAgain = await roleHandler({ messages: roleDecision.messages }, async () => ({ kind: "continue", messages: roleDecision.messages }));
+assert.equal(roleAgain.messages.length, 2, "同一条用户消息不重复注入角色");
+const missDecision = await roleHandler({ messages: [userMessage("prompt-miss", "今天中午吃什么")] }, async () => ({ kind: "continue", messages: [userMessage("prompt-miss", "今天中午吃什么")] }));
+assert.equal(missDecision.messages.length, 1, "没命中不注入角色");
+
 console.log("场景一 首次注入      ✓");
 console.log("场景二 同句去重      ✓");
 console.log("场景三 新句再注入    ✓");
@@ -189,4 +206,5 @@ console.log("场景六 hint:false    ✓");
 console.log("场景七 enabled:false ✓");
 console.log("场景八 配置写回      ✓");
 console.log("场景九 跨步去重      ✓");
+console.log("场景十 角色注入      ✓");
 console.log("冒烟测试通过");

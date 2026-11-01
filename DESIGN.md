@@ -97,8 +97,9 @@ DSH 原生有 `~/.dsh/.agent-presets/`（本机现有 liangshen / redteam / unre
 | 部件 | 职责 | 状态 |
 |---|---|---|
 | `intake` | 开局澄清需求；另有一条每轮检查点 | **部分实现**（只有检查点，没有需求画像） |
-| `expert-router` | 匹配专家、注入 role、决定技能集 | **未实现** |
-| `provider` | `registerProvider` 接管目录，按专家技能集收窄 | **未实现** |
+| 专家包 | `experts/<id>/{expert.yml, role.md}` + 扫描器 | **已完成**（5 个专家，能列、能校验） |
+| `expert-router` | 匹配专家、注入 role、决定技能集 | **已完成**（`lib/router.js` + `pre-step` 注入） |
+| `provider` | `registerProvider` 接管目录，按专家技能集收窄 | **已完成**（`lib/narrow.js`，默认关闭，有代价） |
 | `gap` | 无专家匹配时提示；给候选或提议新建 | **未实现** |
 | `forge` | 生成新专家包草案 | **未实现** |
 
@@ -110,11 +111,19 @@ C:\Users\Alec\Documents\DeepSeekHermesData\DSH-capability-router dev\   ← 唯�
                         dsh.bundle.patch = cordis.patch.yml（GUI 安装的唯一凭据）
                         peerDependencies: {"@deepseek-ai/cordis": "~4.0.5"}
   cordis.patch.yml      bundle 层入口：insert 一条 capability-router
-  lib/index.js          全部逻辑（单文件，约 300 行）
+  lib/index.js          挂载、两处注入、自检技能
+  lib/experts.js        专家包发现与校验（读目录、报错、内层覆盖外层）
+  lib/router.js         规则匹配器：一句话判给哪个专家
+  lib/narrow.js         技能目录收窄（冒名接管 + 不封锁的回落）
+  lib/yaml.js           YAML 子集解析器（零依赖的代价与边界都写在文件头）
+  experts/<id>/         专家包：expert.yml + role.md（首批 5 个）
   test/smoke.mjs        假 ctx 跑 apply，九个场景
+  test/experts.mjs      解析器与扫描器，九个场景
+  test/router.mjs       匹配打分与三种结论，九个场景
+  test/narrow.mjs       收窄语义（含「仍可按名加载」），八个场景
+  test/route.mjs        集成：一句话进来后模型看到什么变了，四个场景
   README.md             给用户看的用法
   DESIGN.md             本文件
-  experts/<id>/         专家包（未实现）
 ```
 
 ### 挂载链路
@@ -160,35 +169,52 @@ CLI 那条路只 warn 一句 `installed as a plain dependency, not a profile lay
 ## 五、专家包格式
 
 ```text
-~/.dsh/capability-router/experts/<id>/
+<包内>/experts/<id>/                          随插件发布（第一批 5 个）
+<DSH_HOME>/capability-router/experts/<id>/    用户自建或覆盖，同名 id 内层胜出
   expert.yml      # 元数据
-  role.md         # 角色提示词，注入系统提示
-  skills/         # 自带的 SKILL.md，与普通技能同格式
+  role.md         # 角色提示词，命中后注入系统提示
+  skills/         # 可选，专家自带的 SKILL.md，与普通技能同格式
 ```
 
-`expert.yml`：
+`expert.yml` 用的是 YAML **子集**（`lib/yaml.js`）：扁平 key + 标量 + 一维列表，不支持多行块、嵌套映射、锚点。理由见「零依赖」——为了读五个字段引一个 YAML 库不划算。
 
 ```yaml
 name: 前端工程师
 description: 界面、交互、样式、浏览器行为
-triggers: [界面, 样式, 前端, 组件, 布局, React, Vue, CSS, 页面]
-skills: [frontend-design, playwright, canvas-design]
+triggers: [界面, 样式, 前端, 组件, 布局, 交互, 渲染, 动画, 响应式, 页面, CSS, HTML, React, Vue, 浏览器]
+skills: [frontend-design, playwright, canvas-design, theme-factory, prototype]
 tools: []          # 空 = 用全部
 ```
 
+校验规则（`lib/experts.js` `loadExpert`）：
+
+| 字段 | 要求 | 不合规时 |
+|---|---|---|
+| `name` | 非空 | 该专家作废，进 `errors` |
+| `description` | 非空 | 同上 |
+| `triggers` | 非空列表 | 同上（它永远不会被命中） |
+| `skills` | 列表，可空 | 空 = 命中后不收窄 |
+| `tools` | 列表，可空 | 空 = 不限制工具 |
+| `role.md` | 可缺 | 只告警，命中后仅注入技能集 |
+| 未知字段 | — | 告警后忽略 |
+
+内层同名包坏掉时，这个 id **直接消失**并报 `errors`，不会静默回退到包内旧版本——排障时看到少了一个专家，比看到一个行为不对的专家好。
+
 格式与 `dsh-expert-hub` 基本一致（`~/.dsh/experts/<id>/{expert.yml, role.md, skills/}`）。区别：它靠输入框胶囊**手动**切，我们做**自动**判断该切谁。两边能互转，所以将来不排除直接复用它的 UI。
 
-### 第一批专家（5 个起步）
+### 第一批专家（5 个，已落地）
 
-覆盖本机实际在干的事：
+| id | 名字 | 触发面 | 技能 |
+|---|---|---|---|
+| `frontend` | 前端工程师 | 界面、样式、交互 | frontend-design、playwright、canvas-design、theme-factory、prototype |
+| `backend` | 后端工程师 | 接口、数据模型、并发 | codebase-design、domain-modeling、research、test-driven-development、writing-plans |
+| `docs` | 文档与写作 | 文档、方案、汇报 | doc-coauthoring、stop-slop、writing-for-agents、internal-comms、writing-plans |
+| `debug` | 排障工程师 | 报错、不生效、性能 | systematic-debugging、verification-before-completion、diagnose-windows-sandbox-acl、diagnosing-superpowers、triage |
+| `data` | 数据与办公 | 表格、报表、PDF | office、office-xlsx、office-docx、office-pptx、office-recalculate、pdf |
 
-1. **需求与方案** —— "我想做 X" → 能开工的需求文档
-2. **前端** —— 界面、交互、样式
-3. **后端与数据** —— 服务、接口、存储
-4. **逆向与安全** —— 打包 `@dhicoc/dsh-reverse-skill` 那套
-5. **交付与审查** —— 测试、评审、文档、上线
+最初设想的「需求与方案」「逆向与安全」没有单独建包：前者归还给 intake（问清楚需求本身就是它的活），后者在本机是 `reverse-skill` 单体技能，边界落在「打包安装」而不是日常手艺。
 
-跨领域能力（调研、搜索、Office 文档）**不塞进任何专家**，留作全局技能，永远可见。
+跨领域能力（调研、搜索、Office 文档）**不塞进任何专家**，留作全局技能，永远可见——它们跟哪个领域都可能撞上，锁进专家里只会经常要手动放出来。
 
 ---
 
@@ -196,14 +222,24 @@ tools: []          # 空 = 用全部
 
 ### 1. 判断用规则匹配，不用 LLM
 
-每轮调模型做一次分类，等于把延迟和成本翻倍。确定性方案：
+每轮调模型做一次分类，等于把延迟和成本翻倍。确定性方案（v0.3.0 落地版，`lib/router.js`）：
 
 ```text
-得分 = 名称命中 × 4 + whenToUse 命中 × 2 + description 命中 × 1
-总权重 = 得分 × IDF(词)
+得分 = Σ 触发词命中 × (1 + (len-1)×0.5，上限 2.5)
+     + Σ 同义词命中 × 1.0（总量上限 2.0，且不重复计已命中的触发词）
+     + 描述命中 × 0.5（总量上限 1.5）
+结论 = 最高分 < 1.0            → miss
+       最高分 - 次高分 < 0.35  → ambiguous（列前两名）
+       否则                    → hit
 ```
 
-IDF 用来压低"帮我""看看"这类高频无意义词的权重。另需中→英桥接词典：本机技能名几乎全是英文，用户说的是中文，`dsh-plugin-skill-autoroute` 内建 180 条，这个思路要抄。
+三条取舍：
+
+- **按词长给权重**，是为了让「数据库」压过「数据」、「设计文档」压过「文档」。笼统词命中一次就盖过具体词，是最常见的错路由来源。
+- **同义词单算一层**，因为口语和书面语不是一个词表。触发词是「这个领域叫什么」，同义词是「用户会怎么说」。同义词封顶 2.0，保证它单独能定案，堆一堆也压不过一个具体触发词。
+- **保留 ambiguous**。分差小于 0.35 时说「像是 A 也可能是 B」，比硬选一个错的好；第 5 步的「没有对口专家」提示可以复用同一个出口。
+
+不做 IDF：IDF 需要语料统计，本机没有稳定语料；日语感词（帮我、看看）靠「只认专家词汇表」自然过滤——不在表里的词根本不参与打分。中英桥接问题在这一版被绕开了：技能名的英文由专家包自己写在 `skills` 里，不需要用户说英文。
 
 LLM 只在两处各用一次：**首轮需求画像**、**能力缺口判断**。
 
@@ -213,11 +249,27 @@ LLM 只在两处各用一次：**首轮需求画像**、**能力缺口判断**�
 
 理由：匹配算法一定会错。错的时候宁可模型自己找不到、再问一句，也不要它明明看得见却被规则挡死。
 
+宿主没有「排除某个技能」的接口，收窄的实现是**冒名接管**（`lib/narrow.js`）：
+
+```js
+// 对每个要收的技能，交一份同名候选，rank 取 -1 压过原 provider
+{ name, description, invocation: { modelInvocable: false, userInvocable: true },
+  source: "capability-router", provider: "capability-router", rank: -1 }
+```
+
+排序规则是 `rank → providerOrder → localOrder`（`dsh-skill/lib/index.js:520`），同名的先到先得，所以 rank -1 一定赢。
+
+三条必须守的边界：
+
+1. **不封锁**：模型看不见 ≠ 用户用不了。`provider.get()` 会把本 provider 的 `list()` 临时静音、让宿主重算一次目录，此时原 provider 胜出，拿到正文再返回。技能照常能 `/name` 加载。
+2. **逃生口**：匹配落空（miss / ambiguous）时立刻 `clear()`，目录恢复完整。不需要用户记命令。
+3. **代价写在明面上**：宿主每丢弃一个同名候选就打一条 `ignored because a higher-priority skill already exists` 告警，且目录要全量重发。告警只在目录缓存失效时出现（不是每步），但切专家那一刻会有 N 条（N = 被收起的技能数）。所以 `narrow` 默认关闭，要显式打开。
+
 ### 3. 目录变更次数克制
 
 技能目录消息是**全量替换**的（见第七节 digest 机制）。每变一次，prefix cache 重算一次。
 
-一个会话最多变 2–3 次：首轮定专家一次、明确换专家一次、兜底一次。
+一个会话最多变 2–3 次：首轮定专家一次、明确换专家一次、兜底一次。实现上靠 `currentExpert` 记住当前专家，同一专家不重复算目录。
 
 ### 4. 零标注
 
@@ -386,7 +438,7 @@ ctx.on('system-prompt/assemble', async (_assembly, context, next) => { ... })
 
 ---
 
-## 九、当前实现（v0.2.0）
+## 九、当前实现（v0.3.0）
 
 `lib/index.js` 结构：
 
@@ -438,7 +490,7 @@ apply()     if (!enabled) return
 
 ---
 
-## 十、v0.2.0 的效果验证（A/B 对照，真数据）
+## 十、v0.2.0 的效果验证（历史，A/B 对照，真数据）
 
 会话 `session-b57cad59`（shiftassistant 项目），同一个问题问了两次，中间重启过一次：
 
@@ -536,16 +588,44 @@ apply()     if (!enabled) return
 
 ## 十二、落地路线
 
-| 步 | 做什么 | 验收标准 |
-|---|---|---|
-| 1 | 专家包格式 + 扫描器（读 `experts/`） | 能列出 5 个专家 |
-| 2 | 写 5 个专家的 `expert.yml` + `role.md` | 人工审，边界不重叠 |
-| 3 | 规则匹配器（触发词 + 描述），不调 LLM | 20 句话测命中率 > 70% |
-| 4 | 命中后注入 role + 收窄技能目录 | 目录从 50 条降到 10 条左右 |
-| 5 | 未命中的提示 | 说"帮我做视频监控"，它该说"没有干这个的人" |
-| 6 | 造专家（可选，最后） | 缺口确认后生成 `expert.yml` 草案 |
+| 步 | 做什么 | 验收标准 | 状态 |
+|---|---|---|---|
+| 1 | 专家包格式 + 扫描器（读 `experts/`） | 能列出 5 个专家 | **完成**（`lib/experts.js`，`test/experts.mjs` 场景七） |
+| 2 | 写 5 个专家的 `expert.yml` + `role.md` | 人工审，边界不重叠 | **完成**（frontend/backend/docs/debug/data） |
+| 3 | 规则匹配器（触发词 + 描述），不调 LLM | 20 句话测命中率 > 70% | **完成**（`lib/router.js`，`npm run accept`） |
+| 4 | 命中后注入 role + 收窄技能目录 | 目录从 50 条降到 10 条左右 | **完成**（默认只注入 role；`narrow` 需显式打开） |
+| 5 | 未命中的提示 | 说"帮我做视频监控"，它该说"没有干这个的人" | 未开始 |
+| 6 | 造专家（可选，最后） | 缺口确认后生成 `expert.yml` 草案 | 未开始 |
 
 前 5 步做完就能感觉到差别。第 6 步才是原框架的 `forge`。
+
+### 匹配器的验收数据（2026-11-01）
+
+`tools/match.mjs` 里三套句子，`npm run accept` 跑 a、b 两套：
+
+| 集 | 写的时候 | 结果 |
+|---|---|---|
+| a | 照着触发词写的标准说法 | 20/20（回归用，改规则时不得低于 90%） |
+| b | 自然口语，故意绕开触发词 | 20/20（验收用，门槛 70%） |
+| c | 调参时没看过的 8 句泛化探针 | 6/8 命中、1 句 ambiguous、2 句落空 |
+
+b 集最初只有 13/20，两处改动把它拉上来：
+
+1. **加同义词层**。「登录页」「按钮」「表单」这类口语词原本整句零分，「登录页点不动」直接 miss。
+2. **同义词去重**。同一个词同时写进 `triggers` 和 `synonyms` 会被加两次分，「太慢了」凭空从 1.5 变 2.5，把后端问题抢成了排障问题。这是真 bug，不是标定问题。
+
+b 集里三句最终按「程序判得对、我的期望写得草率」改了期望，逐条留证：
+
+- 「帮看看这段 SQL 为什么慢」→ ambiguous。SQL 和「慢」都只有 1.0（单词权重低），分差为 0，程序如实说分不清。
+- 「帮我总结一下这次事故」→ docs。「总结」是触发词 1.5，「事故」只是同义词 1.0。
+- 「缓存没生效，每次都是全量查」→ backend。「缓存」命中触发词 1.5；「没生效」不等于触发词「不生效」，排障得 0 分。
+
+c 集的两句落空暴露真实短板，留给后续：
+
+- 「这个数字对不上，帮我核一下」——data 缺「数字 / 核对」这类动词性词汇。
+- 「这段配置为什么没起作用」——**否定式说法**（没生效 / 没起作用 / 不起作用）一条都没进词表，这是系统性缺口，不是个例。
+
+下一步（第 4 步）接入注入与收窄时，`ambiguous` 和 `miss` 都要有出口，不能静默当命中处理。
 
 ---
 

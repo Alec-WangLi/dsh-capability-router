@@ -1,6 +1,6 @@
 # dsh-capability-router
 
-> 状态：v0.2.0，已在 DSH Desktop 0.2.1 上验证生效（A/B 对照见 [DESIGN.md](./DESIGN.md) 第十节）。
+> 状态：v0.3.0。v0.2.0 的检查点已在 DSH Desktop 0.2.1 上做过 A/B 对照（[DESIGN.md](./DESIGN.md) 第十节）；v0.3.0 加了专家包、规则匹配、角色注入与技能目录收窄。
 > 设计取舍、宿主 API 实测记录、踩过的坑都在 [DESIGN.md](./DESIGN.md)。
 
 本机自研的 DSH 插件。解决两个问题：**agent 拿到一句含糊的需求就直接开干**，以及**技能装多了挑不准**。
@@ -8,8 +8,18 @@
 ## 仓库结构
 
 ```text
-lib/index.js           插件本体（单文件，无依赖）
+lib/index.js           插件本体：挂载、两处注入、自检技能
+lib/experts.js         专家包发现与校验（内层覆盖外层）
+lib/router.js          规则匹配器：一句话判给哪个专家
+lib/narrow.js          技能目录收窄（冒名接管，仍可按名加载）
+lib/yaml.js            YAML 子集解析器（为了零依赖手写的）
+experts/<id>/          专家包：expert.yml + role.md，首批 5 个
 test/smoke.mjs         假 ctx 跑 apply，九场景
+test/experts.mjs       解析器与扫描器，九场景
+test/router.mjs        匹配打分与三种结论，九场景
+test/narrow.mjs        收窄语义（含仍可按名加载），八场景
+test/route.mjs         集成：一句话进来后模型看到什么变了
+tools/match.mjs        匹配器验收集（a 回归 / b 口语 / c 探针）
 tools/dump-session.mjs 把 DSH 的多帧 zstd 会话日志 dump 成可读 JSONL
 DESIGN.md              设计文档：为什么这么做、宿主 API 实测、坑
 README.md              本文件
@@ -64,11 +74,99 @@ node tools/dump-session.mjs ~/.dsh/sessions/<slug>/session-<id> --out dump.jsonl
 开工前扫一眼技能目录：对口就加载完整指令再动手；不对口就说「我手上没有对应能力」并说缺什么。
 ```
 
+## 专家包
+
+一个目录就是一个专家：`expert.yml` 说它是谁、什么话该找它，`role.md` 是命中后注入的角色提示词。
+
+```text
+<包内>/experts/<id>/                          随插件发布，改它要动源码
+<DSH_HOME>/capability-router/experts/<id>/    用户自建或覆盖，同名 id 以内层为准
+  expert.yml
+  role.md
+  skills/        可选，专家自带的技能
+```
+
+```yaml
+name: 前端工程师
+description: 界面、交互、样式、浏览器行为
+triggers: [界面, 样式, 前端, 组件, 布局, 交互, 渲染, 动画, 响应式, 页面, CSS, HTML, React, Vue, 浏览器]
+skills: [frontend-design, playwright, canvas-design, theme-factory, prototype]
+tools: []          # 空 = 用全部
+```
+
+`expert.yml` 用的是 YAML 子集：扁平 key、标量、一维列表（`[a, b]` 或缩进 `- a`），不支持多行块和嵌套——要长文本写进 `role.md`。
+
+自带五个：
+
+| id | 名字 | 覆盖什么 |
+|---|---|---|
+| `frontend` | 前端工程师 | 界面、样式、交互、浏览器行为 |
+| `backend` | 后端工程师 | 接口、数据模型、并发、服务边界 |
+| `docs` | 文档与写作 | 文档、方案、汇报、对外文字 |
+| `debug` | 排障工程师 | 报错、崩溃、不生效、性能 |
+| `data` | 数据与办公 | 表格、报表、演示文稿、PDF |
+
+`name`、`description`、`triggers` 任一为空，这个专家会被判无效并进告警；缺 `role.md` 只告警（命中后只注入技能集）。内层同名包坏了不会退回旧版本，那个 id 直接消失——少一个专家比用错一个专家好。
+
+**当前版本只做到「读得出、列得全」**：扫描结果出现在 `capability-router` 自检技能里，匹配与收窄还没接上。
+
+## 匹配器
+
+一句话 → 该由哪个专家接，纯规则，不调模型（`lib/router.js`）：
+
+```text
+触发词命中 × (1 + (len-1)×0.5，上限 2.5)
+同义词命中 × 1.0（总量上限 2.0，已当触发词命中过的不重复计）
+描述命中 × 0.5（总量上限 1.5）
+
+最高分 < 1.0            → miss
+最高分 - 次高分 < 0.35  → ambiguous，列前两名
+否则                    → hit
+```
+
+按词长给权重是为了让「数据库」压过「数据」、「设计文档」压过「文档」——笼统词盖过具体词是最常见的错路由来源。
+
+三种结论都是正常结果，尤其 **ambiguous 不是错误**：分差太小时说「像是 A 也可能是 B」比硬选一个错的好。
+
+跑验收：
+
+```bash
+npm run accept              # a 集（回归）+ b 集（口语，门槛 70%）
+node tools/match.mjs --set c # 泛化探针
+```
+
+`expert.yml` 里 `triggers` 写「这个领域叫什么」，`synonyms` 写「用户会怎么说」：
+
+```yaml
+triggers: [样式, 前端, 组件, 布局, 交互, React, Vue]
+synonyms: [登录, 按钮, 表单, 首页, 弹窗, 滚动, 适配]
+```
+
+## 命中之后做什么
+
+`agent/pre-step` 里拿用户那句原话判一次专家，两条后果：
+
+1. **注入角色**（默认开）：命中就把该专家 `role.md` 作为一条 `source.kind = capability-router-role` 的消息追加进去。一条用户消息只注入一次。
+2. **收窄目录**（默认关，配置 `narrow: true`）：把该专家 `skills` 之外的技能全部设成 `modelInvocable: false`——模型看不见，用户仍可 `/name` 调用。
+
+收窄的实现是冒名接管：宿主没有「排除技能」的接口，只能交一份同名候选、`rank: -1` 压过原 provider（排序是 `rank → providerOrder → localOrder`，同名先到先得）。
+
+代价写在明面上：
+
+- 每被覆盖一个技能，宿主在目录重算时打一条 `ignored because a higher-priority skill already exists` 告警。只在缓存失效时出现，但切专家那一刻会有 N 条。
+- 目录是全量重发的，每变一次 prefix cache 重算一次。所以同一专家不重复算目录，匹配落空立刻恢复完整目录（逃生口）。
+
+```json
+{ "role": true, "narrow": false, "alwaysVisible": ["research", "office", "pdf"] }
+```
+
+`alwaysVisible` 是跨领域技能白名单：调研、Office、PDF 这类跟哪个专家都能撞上的，不进收窄范围。
+
 ## 之后
 
-按当前任务收窄技能目录：只把该领域的技能留在模型目录里，其余设成 `modelInvocable: false`——名字还在、仍可 `/name` 调用，但不占目录 token。
-
-判断走确定性匹配（名称 / whenToUse / 描述加权 + IDF + 中英桥接词典），不每轮调模型。
+- **缺口提示**：匹配落空时说一句「没有干这个的人」，而不是静默按普通对话处理。
+- **造专家**：缺口确认后生成 `expert.yml` 草案，人审过再落盘。
+- **否定式说法**：`没生效 / 没起作用 / 不起作用` 这类整类词还没进词表，是当前匹配的已知短板。
 
 ## 安装方式
 

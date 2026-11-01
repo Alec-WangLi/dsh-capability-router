@@ -1,0 +1,6 @@
+name: 后端工程师
+description: 接口、数据模型、并发与服务边界
+triggers: [接口, API, 数据库, 表结构, 索引, 事务, 并发, 缓存, 消息队列, 部署, 服务, 架构, 模块, 重构, 依赖, 迁移]
+synonyms: [代码, 脚本, 缓存, 超时, 重试, 异步, 并发, SQL, 后端, 定时任务, 限流]
+skills: [codebase-design, domain-modeling, research, test-driven-development, writing-plans]
+tools: []
