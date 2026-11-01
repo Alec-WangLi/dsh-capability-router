@@ -75,18 +75,26 @@ function writeExpert(root, id, yaml, role) {
   assert.match(result.warnings.join(";"), /未知字段 author/);
 }
 
-// 场景七：仓库自带的五个专家都能读出来
+// 场景七：仓库自带的七个专家都能读出来
 {
   const result = scanExperts({ dirs: [path.join(REPO_ROOT, "experts")] });
   assert.equal(result.errors.length, 0, `不应有错误：${result.errors.join(";")}`);
-  assert.equal(result.experts.length, 5, `应扫出 5 个专家，实际 ${result.experts.length}`);
+  assert.equal(result.experts.length, 7, `应扫出 7 个专家，实际 ${result.experts.length}`);
   for (const expert of result.experts) {
     assert.equal(expert.hasRole, true, `${expert.id} 缺 role.md`);
     assert.ok(expert.triggers.length > 0, `${expert.id} 没有触发词`);
     assert.ok(expert.description.length > 0);
   }
+  const kinds = Object.fromEntries(result.experts.map((expert) => [expert.id, expert.kind]));
+  assert.equal(kinds.intake, "intake", "接单专家必须是 intake，阶段推进靠它");
+  assert.equal(kinds.review, "reviewer", "审查专家必须是 reviewer");
+  assert.equal(kinds.backend, "worker");
+  const intake = result.experts.find((expert) => expert.id === "intake");
+  assert.deepEqual(intake.deliverables, ["REQUIREMENTS.md", "TASKS.md"]);
+  assert.ok(intake.handoff.includes("review"), "接单专家要能把活交给审查");
+
   const ids = result.experts.map((expert) => expert.id).sort();
-  assert.deepEqual(ids, ["backend", "data", "debug", "docs", "frontend"]);
+  assert.deepEqual(ids, ["backend", "data", "debug", "docs", "frontend", "intake", "review"]);
 }
 
 // 场景八：内层目录同名覆盖外层，且坏的那份不退回旧版本
@@ -170,7 +178,7 @@ console.log("场景三 多行块告警    ✓");
 console.log("场景四 缺 name 判无效 ✓");
 console.log("场景五 缺 role 告警  ✓");
 console.log("场景六 未知字段告警  ✓");
-console.log("场景七 五个专家      ✓");
+console.log("场景七 七个专家      ✓");
 console.log("场景八 覆盖与坏包    ✓");
 console.log("场景九 toStringList  ✓");
 console.log("场景十 v2 字段      ✓");
