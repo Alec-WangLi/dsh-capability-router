@@ -26,7 +26,6 @@
 | 专家路由 + 角色注入 | `experts` `role` | 开 | 一句话判给五个专家之一，命中就注入它的 `role.md` |
 | 缺口提示 | `gap` | 开 | 分不清说「哪两个在抢」，没人接说「没有干这个的人」；闲聊不打扰 |
 | 缺口记账 | `gapLog` | 开 | 落空的原话记进 `gaps.jsonl`，用来决定下一个专家造什么 |
-| 技能目录收窄 | `narrow` | **关** | 按专家收起用不到的技能（只对插件层生效，见限制） |
 | 长期原则段 | `intake` | 开 | 系统提示里的常驻背景，供长对话回看 |
 
 细节、判据、代价都在 **[docs/FEATURES.md](./docs/FEATURES.md)**。
@@ -80,8 +79,6 @@ node tools/forge.mjs rtsp --name 流媒体工程师 \
   "role": true,
   "gap": true,
   "gapLog": true,
-  "narrow": false,
-  "alwaysVisible": [],
   "order": 5000,
   "debug": false
 }
@@ -93,7 +90,7 @@ node tools/forge.mjs rtsp --name 流媒体工程师 \
 
 ## 已知限制
 
-1. **收窄跨不了作用域层**：只能在插件层压过同名技能，用户目录下的技能压不动（真机 49 个技能只收起 8 个）。这是宿主的层合并语义决定的，不是参数问题——所以默认关闭，详见 FEATURES 第八节。
+1. **技能只写名字、不校验供给**：专家的 `skills` 是引用，装没装、版本对不对目前要等人看（下一版补 `npm run doctor`）。
 2. **匹配是规则**：词表覆盖不到的说法会落空。落空会记账，攒够了再决定是补词表还是造专家。
 3. **注入不进会话历史**：只作用于当步上下文；事后回看会话看不到，只能查 `hints.jsonl`。
 4. **角色注入还没有 A/B**：检查点有对照数据（[DESIGN.md](./DESIGN.md) 第十节），角色注入目前只验证了「确实注入了」。
@@ -106,11 +103,10 @@ node tools/forge.mjs rtsp --name 流媒体工程师 \
 lib/index.js      插件本体：挂载、pre-step 路由、两处注入、自检技能
 lib/experts.js    专家包发现与校验（内层覆盖外层）
 lib/router.js     规则匹配器：一句话判给哪个专家
-lib/narrow.js     技能目录收窄（冒名接管，仍可按名加载）
 lib/gap.js        缺口判定与文案
 lib/yaml.js       YAML 子集解析器（为了零依赖手写的）
 experts/<id>/     专家包：expert.yml + role.md，首批 5 个
-test/             八套 62 个场景
+test/             七套 54 个场景
 tools/            match（验收）· forge（造专家）· gaps（缺口汇总）· dump-session（会话日志 dump）
 docs/             功能说明 · 安装与排障
 DESIGN.md         设计取舍、宿主 API 实测、踩过的坑
@@ -128,6 +124,7 @@ node tools/dump-session.mjs ~/.dsh/sessions/<slug>/session-<id> --stats
 
 | 文件 | 内容 |
 |---|---|
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | **下一版架构**：项目级专家编排、阶段闸门、GUI 落点、迁移路径（第 1 步已执行） |
 | [docs/FEATURES.md](./docs/FEATURES.md) | 每个能力的行为、判据、消息形状、数据文件、测试矩阵、限制 |
 | [docs/INSTALL.md](./docs/INSTALL.md) | 安装、挂载链路、验证、诊断、卸载、热重载的坑 |
 | [DESIGN.md](./DESIGN.md) | 为什么这么设计、宿主 API 实测记录、v0.2.0 的 A/B 对照 |
@@ -136,4 +133,4 @@ node tools/dump-session.mjs ~/.dsh/sessions/<slug>/session-<id> --stats
 
 ## 状态
 
-v0.6.0。检查点的效果有 A/B 对照数据；专家路由、角色注入、缺口提示、缺口记账、造专家均已落地并有测试；收窄功能在真机上撞到宿主的分层天花板，保持默认关闭。
+v0.7.0。检查点的效果有 A/B 对照数据；专家路由、角色注入、缺口提示、缺口记账、造专家均已落地并有测试。按专家收窄技能目录（`narrow`）已在 v0.7.0 删除——它在真机上撞到宿主的作用域分层天花板，且服务错了对象（会话而非单条消息），下一版由专家编排取代。

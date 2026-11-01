@@ -5,7 +5,8 @@ import path from "node:path";
 
 /**
  * 集成测试：真实 lib/index.js × 假宿主服务。
- * 验的是「一句话进来之后，模型看到的东西变没变」——角色消息有没有、目录有没有收窄。
+ * 验的是「一句话进来之后，模型看到的东西变没变」——角色消息有没有、缺口提示开不开口。
+ * 技能目录收窄（narrow）已在 v0.7.0 删除，这里反过来断言：路由不该碰目录。
  */
 
 process.env.DSH_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-route-"));
@@ -99,27 +100,27 @@ function userMessage(id, text) {
   return { role: "user", id, content: [{ type: "text", text }], source: { kind: "user" } };
 }
 
-// 场景一：命中前端 → 注入角色 + 收起其他领域的技能
+// 场景一：命中前端 → 注入角色消息，但一行都不碰技能目录
 {
   const { ctx, handlers, skills } = createFakeContext();
-  plugin.apply(ctx, { hint: false, role: true, narrow: true, alwaysVisible: [] });
+  plugin.apply(ctx, { hint: false, role: true });
   const handler = handlers.get("agent/pre-step");
   const messages = [userMessage("p1", "登录页的样式在窄屏下全乱了")];
   const decision = await handler({ messages }, async () => ({ kind: "continue", messages }));
 
   assert.equal(decision.messages.length, 2, "应追加一条角色消息");
   assert.equal(decision.messages[1].source.kind, "capability-router-role");
+  assert.equal(decision.messages[1].source.expert, "frontend");
 
   const list = await skills.list();
-  const visible = list.filter((skill) => skill.invocation.modelInvocable).map((skill) => skill.name).sort();
-  assert.deepEqual(visible, ["frontend-design", "playwright"], "只该留下该专家用到的技能");
-  assert.ok(!list.some((skill) => skill.name === "capability-router"), "自检技能不在假目录里");
+  assert.ok(list.every((skill) => skill.invocation.modelInvocable), "路由不该改技能目录");
+  assert.ok(list.every((skill) => skill.provider === "dsh-skill-filesystem"), "也不该注册 provider");
 }
 
-// 场景二：换成另一个专家 → 目录跟着换，且不重复注入角色
+// 场景二：换成另一个专家 → 注入对应的角色
 {
-  const { ctx, handlers, skills } = createFakeContext();
-  plugin.apply(ctx, { hint: false, role: true, narrow: true });
+  const { ctx, handlers } = createFakeContext();
+  plugin.apply(ctx, { hint: false, role: true });
   const handler = handlers.get("agent/pre-step");
 
   const first = [userMessage("p2", "这个页面的样式不对")];
@@ -129,42 +130,31 @@ function userMessage(id, text) {
   const decision = await handler({ messages: second }, async () => ({ kind: "continue", messages: second }));
   assert.equal(decision.messages.length, 2);
   assert.equal(decision.messages[1].source.expert, "data");
-
-  const visible = (await skills.list()).filter((skill) => skill.invocation.modelInvocable).map((skill) => skill.name).sort();
-  assert.deepEqual(visible, ["office-xlsx", "pdf"], "换专家后目录应换成新专家那份（data 的 skills 含 pdf）");
 }
 
-// 场景三：匹配不到时不硬选，目录恢复完整
+// 场景三：匹配不到时不硬选，也不注入角色
 {
-  const { ctx, handlers, skills } = createFakeContext();
-  plugin.apply(ctx, { hint: false, role: true, narrow: true });
+  const { ctx, handlers } = createFakeContext();
+  plugin.apply(ctx, { hint: false, role: true });
   const handler = handlers.get("agent/pre-step");
 
-  const hit = [userMessage("p4", "内存一直涨，怀疑泄漏")];
-  await handler({ messages: hit }, async () => ({ kind: "continue", messages: hit }));
-  assert.ok((await skills.list()).some((skill) => skill.invocation.modelInvocable === false), "先确认已收窄");
-
-  const miss = [userMessage("p5", "今天中午吃什么")];
+  const miss = [userMessage("p4", "今天中午吃什么")];
   const decision = await handler({ messages: miss }, async () => ({ kind: "continue", messages: miss }));
   assert.equal(decision.messages.length, 1, "没命中不注入任何消息");
-  const all = (await skills.list()).filter((skill) => skill.invocation.modelInvocable);
-  assert.equal(all.length, CATALOG.length, "应该有救生索：目录恢复完整");
 }
 
-// 场景四：narrow 关闭时一行都不碰宿主目录
+// 场景四：全关就不挂钩
 {
-  const { ctx, handlers, skills } = createFakeContext();
-  plugin.apply(ctx, { hint: false, role: false, gap: false, narrow: false });
+  const { ctx, handlers } = createFakeContext();
+  plugin.apply(ctx, { hint: false, role: false, gap: false });
   const handler = handlers.get("agent/pre-step");
   assert.equal(handler, undefined, "全关就不该挂钩");
-  const list = await skills.list();
-  assert.ok(list.every((skill) => skill.provider === "dsh-skill-filesystem"));
 }
 
 // 场景五：缺口提示接在同一条链路上——派活没命中会多说一句，闲聊不会
 {
   const { ctx, handlers } = createFakeContext();
-  plugin.apply(ctx, { hint: false, role: false, gap: true, narrow: false });
+  plugin.apply(ctx, { hint: false, role: false, gap: true });
   const handler = handlers.get("agent/pre-step");
 
   const task = [userMessage("p6", "帮我做视频监控系统")];
@@ -177,9 +167,9 @@ function userMessage(id, text) {
   assert.equal(chatDecision.messages.length, 1, "闲聊不打扰");
 }
 
-console.log("场景一 命中即收窄    ✓");
-console.log("场景二 换专家换目录  ✓");
-console.log("场景三 落空即恢复    ✓");
-console.log("场景四 narrow 关闭   ✓");
-console.log("场景五 缺口提示      ✓");
+console.log("场景一 命中即注入角色  ✓");
+console.log("场景二 换专家换角色    ✓");
+console.log("场景三 落空不硬选      ✓");
+console.log("场景四 全关不挂钩      ✓");
+console.log("场景五 缺口提示        ✓");
 console.log("路由集成测试通过");
