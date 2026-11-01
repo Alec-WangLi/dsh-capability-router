@@ -143,6 +143,7 @@ node tools/dump-session.mjs ~/.dsh/sessions/<slug>/session-<id> --stats
 | 文件 | 内容 |
 |---|---|
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | **下一版架构**：项目级专家编排、阶段闸门、GUI 落点、迁移路径（第 1 步已执行） |
+| [docs/ACCEPTANCE.md](./docs/ACCEPTANCE.md) | **验收实录**：让插件自己跑一个视频监控项目，六轮流水、暴露的 5 个协议问题与修法、没验到的东西 |
 | [docs/FEATURES.md](./docs/FEATURES.md) | 每个能力的行为、判据、消息形状、数据文件、测试矩阵、限制 |
 | [docs/INSTALL.md](./docs/INSTALL.md) | 安装、挂载链路、验证、诊断、卸载、热重载的坑 |
 | [DESIGN.md](./DESIGN.md) | 为什么这么设计、宿主 API 实测记录、v0.2.0 的 A/B 对照 |
