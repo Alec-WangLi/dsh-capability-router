@@ -23,6 +23,7 @@
 | 能力 | 开关 | 默认 | 说明 |
 |---|---|---|---|
 | 当轮检查点 | `hint` | 开 | 每条用户消息后注入一小段：提问直接答 / 命令有黑洞先问 / 报告接着做 |
+| 专家目录 + `expert()` 工具 | `catalog` `expertTool` | 开 | 目录进系统提示（稳定前缀），`role.md` 按需取 |
 | 专家路由 + 角色注入 | `experts` `role` | 开 | 一句话判给五个专家之一，命中就注入它的 `role.md` |
 | 缺口提示 | `gap` | 开 | 分不清说「哪两个在抢」，没人接说「没有干这个的人」；闲聊不打扰 |
 | 缺口记账 | `gapLog` | 开 | 落空的原话记进 `gaps.jsonl`，用来决定下一个专家造什么 |
@@ -78,6 +79,8 @@ node tools/forge.mjs rtsp --name 流媒体工程师 \
   "intake": true,
   "hint": true,
   "experts": true,
+  "catalog": true,
+  "expertTool": true,
   "role": true,
   "gap": true,
   "gapLog": true,
@@ -104,12 +107,13 @@ node tools/forge.mjs rtsp --name 流媒体工程师 \
 ```text
 lib/index.js      插件本体：挂载、pre-step 路由、两处注入、自检技能
 lib/experts.js    专家包发现与校验（内层覆盖外层）
+lib/catalog.js    专家目录（系统提示段）+ expert(name) 工具定义
 lib/router.js     规则匹配器：一句话判给哪个专家
 lib/gap.js        缺口判定与文案
 lib/doctor.js     技能供给检查（纯计算，不碰文件系统）
 lib/yaml.js       YAML 子集解析器（为了零依赖手写的）
 experts/<id>/     专家包：expert.yml + role.md，首批 5 个
-test/             八套 62 个场景
+test/             九套 68 个场景
 tools/            match（验收）· doctor（供给体检）· forge（造专家）· gaps（缺口汇总）· dump-session（会话日志 dump）
 docs/             功能说明 · 安装与排障
 DESIGN.md         设计取舍、宿主 API 实测、踩过的坑
@@ -136,4 +140,4 @@ node tools/dump-session.mjs ~/.dsh/sessions/<slug>/session-<id> --stats
 
 ## 状态
 
-v0.8.0。检查点的效果有 A/B 对照数据；专家路由、角色注入、缺口提示、缺口记账、造专家均已落地并有测试。按专家收窄技能目录（`narrow`）已在 v0.7.0 删除——它在真机上撞到宿主的作用域分层天花板，且服务错了对象（会话而非单条消息），下一版由专家编排取代；专家包升到 v2（`kind` / `handoff` / `deliverables` + 技能依赖声明），配 `npm run doctor` 供给体检。
+v0.9.0。检查点的效果有 A/B 对照数据；专家路由、角色注入、缺口提示、缺口记账、造专家均已落地并有测试。按专家收窄技能目录（`narrow`）已在 v0.7.0 删除——它在真机上撞到宿主的作用域分层天花板，且服务错了对象（会话而非单条消息），下一版由专家编排取代；专家包升到 v2（`kind` / `handoff` / `deliverables` + 技能依赖声明），配 `npm run doctor` 供给体检。v0.9.0 起多了一个入口：专家目录常驻系统提示 + `expert(name)` 工具按需取详情——判断权从插件交回模型。

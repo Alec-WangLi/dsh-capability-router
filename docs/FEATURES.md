@@ -36,6 +36,7 @@ agent/pre-step（本插件在这里）
 |---|---|---|---|---|
 | 长期原则段 | `intake` | 开 | —（进系统提示） | — |
 | 当轮检查点 | `hint` | 开 | `capability-router-hint` | `hints.jsonl` |
+| 专家目录 + `expert()` 工具 | `catalog` `expertTool` | 开 | 目录进系统提示，详情按需取 |
 | 专家路由 + 角色注入 | `experts` + `role` | 开 | `capability-router-role` | — |
 | 缺口提示 | `gap` | 开 | `capability-router-gap` | — |
 | 缺口记账 | `gapLog` | 开 | — | `gaps.jsonl` |
@@ -141,6 +142,39 @@ node tools/match.mjs --set c # c 集（未参与调参的泛化探针）
 当前：a 20/20、b 20/20、c 8/8。
 
 b 集有三句曾判「不一致」，复核后是期望写错了、程序判得对，已改期望并留证：「SQL 为什么慢」→ ambiguous（两个信号都是 1.0）、「总结这次事故」→ docs（触发词 1.5 压过同义词 1.0）、「缓存没生效」→ backend（「没生效」≠ 触发词「不生效」，后来补进 synonyms）。
+
+---
+
+### v2 入口：专家目录 + `expert(name)`（`catalog` / `expertTool`，默认开）
+
+规则匹配（本节上半）是 v1 的做法：插件替模型选人，选错就没救。v2 把判断权换了个位置：
+
+| 产物 | 放哪 | 为什么 |
+|---|---|---|
+| 专家目录（`catalogText()`） | 系统提示 `capability-experts`，order = 配置 `order` + 1 | 内容稳定 → prefix cache 能命中；每步会变的只有状态卡 |
+| `expert(name)` 工具 | `ctx.tools.register()` | 详情（`role.md` 全文 + 交付物 + 交接）按需取，不常驻上下文 |
+
+目录长这样（渲染自五个专家包，`kind` / 必装技能 / 产出 / 交接全部就位）：
+
+```text
+## 可用专家（能力路由）
+- **后端工程师**（backend，worker）：接口、数据模型、并发与服务边界
+  主力技能：codebase-design、domain-modeling
+  备用技能：research
+  产出：接口定义、数据模型、迁移脚本
+  常交给：frontend、review
+```
+
+**不用 `defineTool` 的原因**：它是宿主包 `@deepseek-ai/dsh-tools` 里的函数。本插件零依赖、装在用户目录里，不该反过来解析宿主的依赖树——那会在宿主升级时静默炸掉。所以直接给 `register()` 需要的形状：
+
+```js
+{ name, description, parameters /* 标准 JSON Schema */, output: { schema, render }, execute }
+```
+
+已核对 `dsh-tools` 的 `register()`（`lib/index.js:2974`）：它只校验 `output.render` 是函数、`output.schema` 落在支持的 JSON Schema 子集内，`parameters` 原样透传给模型。`required` 用标准数组写法（宿主 `defineTool` 的 spec 写法是另一套，这里用不到）。
+
+- `catalog: false` 不注入目录；`expertTool: false` 不注册工具；没有专家包时两者都不注册（不往系统提示里塞空段）
+- 与检查点的关系是**会抢注意力**：目录说「按阶段换人」，检查点说「有黑洞问一句」。项目模式下检查点要降级为一句——这是第 4 步的活，现在两条都还在。
 
 ---
 
@@ -398,6 +432,7 @@ npm run check # 六个源文件的语法检查
 | 套件 | 场景 | 覆盖 |
 |---|---|---|
 | `test/smoke.mjs` | 12 | 注入、去重、透传、开关组合、角色、缺口、记账 |
+| `test/catalog.mjs` | 6 | 目录文案、查找、工具定义形状、执行、渲染、apply 注册 |
 | `test/experts.mjs` | 11 | YAML 子集（含流式映射）、扫描、校验、内层覆盖、v2 字段、老包兼容 |
 | `test/router.mjs` | 9 | 打分、三种结论、中英匹配边界 |
 | `test/gap.mjs` | 8 | 任务判定、三种文案出口 |

@@ -72,9 +72,12 @@ const { ctx, handlers, sections, skills, logs } = createFakeContext();
 // 本文件只测检查点，关掉角色注入让断言数与文案保持稳定；角色注入单独在场景十测。
 plugin.apply(ctx, { role: false, gap: false });
 assert.deepEqual(logs, [], `挂载过程不应有告警：${logs.join(" | ")}`);
-assert.equal(sections.length, 1, "应注册一段系统提示原则");
+assert.equal(sections.length, 2, "应注册原则段与专家目录两段系统提示");
 assert.equal(sections[0].name, "capability-intake");
 assert.ok(sections[0].text.includes("能力路由"), "原则段应包含标题");
+assert.equal(sections[1].name, "capability-experts");
+assert.ok(sections[1].text.includes("可用专家"), "专家目录应包含标题");
+assert.ok(sections[1].order > sections[0].order, "目录排在原则段之后");
 assert.equal(skills.length, 1, "应注册一个自检技能");
 assert.equal(skills[0].name, "capability-router");
 
@@ -130,7 +133,7 @@ assert.equal(rejected.messages, undefined, "reject 分支不应带 messages");
 const off = createFakeContext();
 plugin.apply(off.ctx, { hint: false, role: false, gap: false });
 assert.equal(off.handlers.has("agent/pre-step"), false, "hint:false 时不应挂钩");
-assert.equal(off.sections.length, 1, "原则段仍应注册");
+assert.equal(off.sections.length, 2, "原则段与专家目录仍应注册");
 
 // 场景七：总开关关掉 → 什么都不做
 const disabled = createFakeContext();

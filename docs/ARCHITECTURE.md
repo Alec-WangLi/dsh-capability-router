@@ -71,7 +71,7 @@ docs     文档：读得懂、能照做的那一层。
 
 每个专家只占一行：**名字 + 何时找我 + 我交什么**。详情靠 ②。
 
-### ② `expert(name)` 工具：已核实可用
+### ② `expert(name)` 工具：已落地（未用 `defineTool`）
 
 宿主给插件留了工具注册口：
 
@@ -179,7 +179,7 @@ v1 的 `skills: [a, b]` 仍然能解析（当 `required: false` 且 `source: unk
 apply():
   if (!enabled) return
   ctx.systemPrompt.section(专家目录 + 协议)      // ① 稳定前缀
-  ctx.tools.register(expert())                  // ② 按需取详情
+  ctx.tools.register(expert())                  // ② 按需取详情（直接给 register 的形状，不 import defineTool）
   ctx.effect(() => ctx.skills.register(selfSkill))
   ctx.on("agent/pre-step", async (payload, next) => {
     const decision = await next() ?? payload
@@ -313,7 +313,7 @@ client 半边只有一层壳：tab 导航 + iframe(src = panel 地址)
 |---|---|---|---|
 | 1 | ~~删 `narrow` 全套（代码、测试、配置、文档）~~ **已完成 v0.7.0** | 62 → 54 场景全绿 | 低，纯减法 |
 | 2 | ~~专家包 v2 字段 + `tools/doctor.mjs`~~ **已完成 v0.8.0** | `npm run doctor` 报出五个专家的依赖现状（host 源不查） | 低 |
-| 3 | 专家目录进系统提示 + `expert()` 工具 | 发一句领域话，模型自己调 `expert("backend")` | 中，工具 schema 要对 |
+| 3 | ~~专家目录进系统提示 + `expert()` 工具~~ **已完成 v0.9.0** | `npm test` 68 场景；真机待验证「模型会自己调 `expert()`」 | 中，工具 schema 要对 |
 | 4 | 会话状态 + 阶段闸门 + `runs.jsonl` | 视频监控场景跑到 spec 阶段，状态卡正确 | 中，会话身份字段要确认 |
 | 5 | 加 `intake`、`review` 两个专家包 | 接单专家产出 `REQUIREMENTS.md` 与 `TASKS.md` | 中，提示词要反复调 |
 | 6 | `tools/panel.mjs` 只读面板 | 浏览器里能看到第 4 步的状态 | 低 |
