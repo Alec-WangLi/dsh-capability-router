@@ -1,6 +1,6 @@
 {
   "name": "dsh-capability-router",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "让 agent 在动手之前先问清需求、再确认手上能力够不够；后续负责按任务收窄技能目录、按角色请专家。",
   "type": "module",
   "main": "lib/index.js",
@@ -18,8 +18,8 @@
     "DESIGN.md"
   ],
   "scripts": {
-    "test": "node test/smoke.mjs && node test/experts.mjs && node test/router.mjs && node test/narrow.mjs && node test/route.mjs",
-    "check": "node --check lib/index.js && node --check lib/experts.js && node --check lib/router.js && node --check lib/narrow.js && node --check lib/yaml.js",
+    "test": "node test/smoke.mjs && node test/experts.mjs && node test/router.mjs && node test/gap.mjs && node test/narrow.mjs && node test/route.mjs",
+    "check": "node --check lib/index.js && node --check lib/experts.js && node --check lib/router.js && node --check lib/gap.js && node --check lib/narrow.js && node --check lib/yaml.js",
     "accept": "node tools/match.mjs"
   },
   "keywords": [

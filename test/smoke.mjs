@@ -70,7 +70,7 @@ const plugin = await import("../lib/index.js");
 const { ctx, handlers, sections, skills, logs } = createFakeContext();
 
 // 本文件只测检查点，关掉角色注入让断言数与文案保持稳定；角色注入单独在场景十测。
-plugin.apply(ctx, { role: false });
+plugin.apply(ctx, { role: false, gap: false });
 assert.deepEqual(logs, [], `挂载过程不应有告警：${logs.join(" | ")}`);
 assert.equal(sections.length, 1, "应注册一段系统提示原则");
 assert.equal(sections[0].name, "capability-intake");
@@ -128,7 +128,7 @@ assert.equal(rejected.messages, undefined, "reject 分支不应带 messages");
 
 // 场景六：关掉 hint → 不再挂钩
 const off = createFakeContext();
-plugin.apply(off.ctx, { hint: false, role: false });
+plugin.apply(off.ctx, { hint: false, role: false, gap: false });
 assert.equal(off.handlers.has("agent/pre-step"), false, "hint:false 时不应挂钩");
 assert.equal(off.sections.length, 1, "原则段仍应注册");
 
@@ -142,7 +142,7 @@ assert.equal(disabled.handlers.size, 0);
 // 场景九：messages 里看不到历史注入（agent loop 每步重建上下文时的常见情形），
 // 同一个 agent 连跑五步也只应注入一次——靠 WeakMap 兜底，不靠 messages 内容
 const loopRun = createFakeContext();
-plugin.apply(loopRun.ctx, { role: false });
+plugin.apply(loopRun.ctx, { role: false, gap: false });
 const loopHandler = loopRun.handlers.get("agent/pre-step");
 const agent = { id: "agent-9" };
 const stable = [userMessage("prompt-9", "换个思路再做一遍")];
@@ -183,7 +183,7 @@ fs.rmSync(tmpHome, { recursive: true, force: true });
 
 // 场景十：命中专家后注入 role.md，只注入一次
 const roleRun = createFakeContext();
-plugin.apply(roleRun.ctx, { hint: false, role: true });
+plugin.apply(roleRun.ctx, { hint: false, role: true, gap: false });
 const roleHandler = roleRun.handlers.get("agent/pre-step");
 const frontendPrompt = [userMessage("prompt-role", "登录页的样式在窄屏下全乱了")];
 const roleDecision = await roleHandler({ messages: frontendPrompt }, async () => ({ kind: "continue", messages: frontendPrompt }));
@@ -197,6 +197,32 @@ assert.equal(roleAgain.messages.length, 2, "同一条用户消息不重复注入
 const missDecision = await roleHandler({ messages: [userMessage("prompt-miss", "今天中午吃什么")] }, async () => ({ kind: "continue", messages: [userMessage("prompt-miss", "今天中午吃什么")] }));
 assert.equal(missDecision.messages.length, 1, "没命中不注入角色");
 
+// 场景十一：缺口提示——派活才开口，闲聊不打扰
+const gapRun = createFakeContext();
+plugin.apply(gapRun.ctx, { hint: false, role: false, gap: true });
+const gapHandler = gapRun.handlers.get("agent/pre-step");
+
+const noExpert = [userMessage("prompt-gap1", "帮我做视频监控系统")];
+const gapDecision = await gapHandler({ messages: noExpert }, async () => ({ kind: "continue", messages: noExpert }));
+assert.equal(gapDecision.messages.length, 2, "派活但没对口专家应提示一句");
+assert.equal(gapDecision.messages[1].source.kind, "capability-router-gap");
+assert.ok(gapDecision.messages[1].content[0].text.includes("没有对口的专家"));
+
+const chitchat = [userMessage("prompt-gap2", "今天中午吃什么")];
+const chatDecision = await gapHandler({ messages: chitchat }, async () => ({ kind: "continue", messages: chitchat }));
+assert.equal(chatDecision.messages.length, 1, "闲聊不该被提示打扰");
+
+const fuzzy = [userMessage("prompt-gap3", "帮我写一下这个接口的文档")];
+const fuzzyDecision = await gapHandler({ messages: fuzzy }, async () => ({ kind: "continue", messages: fuzzy }));
+assert.ok(fuzzyDecision.messages[1].content[0].text.includes("分不清"), "分不清要给结论里的前两名");
+
+const hitPrompt = [userMessage("prompt-gap4", "登录页的样式在窄屏下全乱了")];
+const hitDecision = await gapHandler({ messages: hitPrompt }, async () => ({ kind: "continue", messages: hitPrompt }));
+assert.equal(hitDecision.messages.length, 1, "命中时不该再插缺口提示");
+
+const againGap = await gapHandler({ messages: gapDecision.messages }, async () => ({ kind: "continue", messages: gapDecision.messages }));
+assert.equal(againGap.messages.length, 2, "同一条消息只提示一次");
+
 console.log("场景一 首次注入      ✓");
 console.log("场景二 同句去重      ✓");
 console.log("场景三 新句再注入    ✓");
@@ -207,4 +233,5 @@ console.log("场景七 enabled:false ✓");
 console.log("场景八 配置写回      ✓");
 console.log("场景九 跨步去重      ✓");
 console.log("场景十 角色注入      ✓");
+console.log("场景十一 缺口提示    ✓");
 console.log("冒烟测试通过");

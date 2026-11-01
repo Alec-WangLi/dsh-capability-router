@@ -1,6 +1,6 @@
 # dsh-capability-router
 
-> 状态：v0.3.0。v0.2.0 的检查点已在 DSH Desktop 0.2.1 上做过 A/B 对照（[DESIGN.md](./DESIGN.md) 第十节）；v0.3.0 加了专家包、规则匹配、角色注入与技能目录收窄。
+> 状态：v0.4.0。v0.2.0 的检查点已在 DSH Desktop 0.2.1 上做过 A/B 对照（[DESIGN.md](./DESIGN.md) 第十节）；v0.3.0 加了专家包、规则匹配、角色注入与技能目录收窄。
 > 设计取舍、宿主 API 实测记录、踩过的坑都在 [DESIGN.md](./DESIGN.md)。
 
 本机自研的 DSH 插件。解决两个问题：**agent 拿到一句含糊的需求就直接开干**，以及**技能装多了挑不准**。
@@ -12,11 +12,13 @@ lib/index.js           插件本体：挂载、两处注入、自检技能
 lib/experts.js         专家包发现与校验（内层覆盖外层）
 lib/router.js          规则匹配器：一句话判给哪个专家
 lib/narrow.js          技能目录收窄（冒名接管，仍可按名加载）
+lib/gap.js             缺口提示：分不清 / 没人接时说哪一句
 lib/yaml.js            YAML 子集解析器（为了零依赖手写的）
 experts/<id>/          专家包：expert.yml + role.md，首批 5 个
 test/smoke.mjs         假 ctx 跑 apply，九场景
 test/experts.mjs       解析器与扫描器，九场景
 test/router.mjs        匹配打分与三种结论，九场景
+test/gap.mjs           任务判定与缺口文案，八场景
 test/narrow.mjs        收窄语义（含仍可按名加载），八场景
 test/route.mjs         集成：一句话进来后模型看到什么变了
 tools/match.mjs        匹配器验收集（a 回归 / b 口语 / c 探针）
@@ -144,10 +146,11 @@ synonyms: [登录, 按钮, 表单, 首页, 弹窗, 滚动, 适配]
 
 ## 命中之后做什么
 
-`agent/pre-step` 里拿用户那句原话判一次专家，两条后果：
+`agent/pre-step` 里拿用户那句原话判一次专家，三条后果：
 
 1. **注入角色**（默认开）：命中就把该专家 `role.md` 作为一条 `source.kind = capability-router-role` 的消息追加进去。一条用户消息只注入一次。
 2. **收窄目录**（默认关，配置 `narrow: true`）：把该专家 `skills` 之外的技能全部设成 `modelInvocable: false`——模型看不见，用户仍可 `/name` 调用。
+3. **缺口提示**（默认开）：分不清就说出是哪两个专家在抢；一个都没命中且这句话像是在派活，就说「没有干这个的人」。闲聊不触发——「今天中午吃什么」不该被插一段话。
 
 收窄的实现是冒名接管：宿主没有「排除技能」的接口，只能交一份同名候选、`rank: -1` 压过原 provider（排序是 `rank → providerOrder → localOrder`，同名先到先得）。
 
@@ -164,9 +167,8 @@ synonyms: [登录, 按钮, 表单, 首页, 弹窗, 滚动, 适配]
 
 ## 之后
 
-- **缺口提示**：匹配落空时说一句「没有干这个的人」，而不是静默按普通对话处理。
 - **造专家**：缺口确认后生成 `expert.yml` 草案，人审过再落盘。
-- **否定式说法**：`没生效 / 没起作用 / 不起作用` 这类整类词还没进词表，是当前匹配的已知短板。
+- **否定式说法**：`没生效 / 没起作用 / 不起作用` 这一整类还没进词表，是当前匹配的已知短板。
 
 ## 安装方式
 

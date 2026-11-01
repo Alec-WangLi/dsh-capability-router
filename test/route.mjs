@@ -154,15 +154,32 @@ function userMessage(id, text) {
 // 场景四：narrow 关闭时一行都不碰宿主目录
 {
   const { ctx, handlers, skills } = createFakeContext();
-  plugin.apply(ctx, { hint: false, role: false, narrow: false });
+  plugin.apply(ctx, { hint: false, role: false, gap: false, narrow: false });
   const handler = handlers.get("agent/pre-step");
-  assert.equal(handler, undefined, "三样都关就不该挂钩");
+  assert.equal(handler, undefined, "全关就不该挂钩");
   const list = await skills.list();
   assert.ok(list.every((skill) => skill.provider === "dsh-skill-filesystem"));
+}
+
+// 场景五：缺口提示接在同一条链路上——派活没命中会多说一句，闲聊不会
+{
+  const { ctx, handlers } = createFakeContext();
+  plugin.apply(ctx, { hint: false, role: false, gap: true, narrow: false });
+  const handler = handlers.get("agent/pre-step");
+
+  const task = [userMessage("p6", "帮我做视频监控系统")];
+  const gapDecision = await handler({ messages: task }, async () => ({ kind: "continue", messages: task }));
+  assert.equal(gapDecision.messages.length, 2);
+  assert.equal(gapDecision.messages[1].source.kind, "capability-router-gap");
+
+  const chat = [userMessage("p7", "今天中午吃什么")];
+  const chatDecision = await handler({ messages: chat }, async () => ({ kind: "continue", messages: chat }));
+  assert.equal(chatDecision.messages.length, 1, "闲聊不打扰");
 }
 
 console.log("场景一 命中即收窄    ✓");
 console.log("场景二 换专家换目录  ✓");
 console.log("场景三 落空即恢复    ✓");
 console.log("场景四 narrow 关闭   ✓");
+console.log("场景五 缺口提示      ✓");
 console.log("路由集成测试通过");
