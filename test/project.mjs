@@ -110,6 +110,23 @@ async function step(handler, agentId, messages) {
   assert.equal(fresh.phase, "idle");
 }
 
+// 场景六：模型显式交卷——expert("intake", { phase: "build" }) 推进状态，回退会被拒绝
+{
+  const { ctx, tools } = createFakeContext();
+  plugin.apply(ctx, {});
+  const tool = tools.find((definition) => definition.name === "expert");
+
+  const built = await tool.execute({ name: "intake", phase: "build" }, { agent: { id: "sess-4" } });
+  assert.equal(built.found, true);
+  const saved = JSON.parse(fs.readFileSync(path.join(STATE_DIR, "sessions", "sess-4.json"), "utf8"));
+  assert.equal(saved.phase, "build", "spec 由 openExpert 推进，build 由显式 phase 推进");
+
+  const back = await tool.execute({ name: "intake", phase: "spec" }, { agent: { id: "sess-4" } });
+  assert.match(back.note ?? "", /只能往前走/);
+  const after = JSON.parse(fs.readFileSync(path.join(STATE_DIR, "sessions", "sess-4.json"), "utf8"));
+  assert.equal(after.phase, "build", "被拒绝的推进不该改状态");
+}
+
 // 场景五：关掉 project 就当没有状态——检查点回来
 {
   const { ctx, handlers } = createFakeContext();
@@ -129,4 +146,5 @@ console.log("场景二 状态卡取代检查点 ✓");
 console.log("场景三 runs 记账       ✓");
 console.log("场景四 工具推进状态    ✓");
 console.log("场景五 project 可关    ✓");
+console.log("场景六 显式交卷        ✓");
 console.log("项目模式测试通过");

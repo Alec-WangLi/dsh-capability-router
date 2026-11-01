@@ -341,9 +341,30 @@ backend  后端工程师（worker）
 |---|---|
 | 打开接单专家（`expert("intake")`，`kind: intake`） | `idle` → `spec` |
 | 打开实现类专家（`kind: worker`） | 不变（只记进「在场专家」） |
+| `expert(id, { phase: "build" })` | 显式推进一格（`spec → build`、`build → review`） |
 | `build` 阶段打开审查专家（`kind: reviewer`） | `build` → `review` |
 
 状态按会话落盘：`<STATE_DIR>/sessions/<sessionId>.json`。会话 id 取 `payload.agent.id`——宿主里它等于 `agent.session.id`（`dsh-agent/lib/index.js:513-514` 有一处断言，可以直接信）。文件坏了、丢了、字段怪，都当作「空闲」，不让状态机把挂载搞崩。
+
+### 为什么需要「显式交卷」
+
+`spec → build` 这一步没有谁能替模型判断：需求确认完没完，取决于 `REQUIREMENTS.md` 写没写好、用户认不认，而插件拿不到会话的工作目录（`agent.session` 上没有 workspace 字段），没法靠文件是否存在来推断。
+
+所以给它一个显式出口：**交卷时说一声**。
+
+```text
+expert("intake", { phase: "build" })   // 需求文档交付，进实现
+expert("review", { phase: "review" })  // 实现完成，进审查
+```
+
+`advancePhase()` 只允许**往前走一格**，回退或跳级都会被拒绝并把原因写回 `note`：
+
+```text
+阶段只能往前走：当前 build，目标是 spec
+不能跳着走：spec → review，先经过 build
+```
+
+这是刻意的：阶段是事实的记录，不是可以随手拨的开关。没有这个出口，会话会永远卡在 `spec`，状态卡会一直念「去做需求文档」。
 
 ### 三个阶段各说一句话
 

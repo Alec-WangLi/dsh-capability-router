@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { gateNote, newState, normalizeState, openExpert, readState, stateCardText, stateFile, writeState } from "../lib/state.js";
+import { advancePhase, gateNote, newState, normalizeState, openExpert, readState, stateCardText, stateFile, writeState } from "../lib/state.js";
 
 /**
  * 会话状态的单元测试：推进规则、闸门提示、状态卡文案、文件的读与写。
@@ -80,6 +80,27 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-state-"));
   assert.equal(normalizeState(null).phase, "idle");
 }
 
+// 场景七：显式推进——只能往前走一格，回退与跳级都拒绝并给出原因
+{
+  const spec = { sessionId: "s7", phase: "spec", experts: ["intake"] };
+  const built = advancePhase(spec, "build");
+  assert.equal(built.changed, true);
+  assert.equal(built.state.phase, "build");
+  assert.equal(advancePhase(built.state, "review").state.phase, "review");
+
+  const back = advancePhase(built.state, "spec");
+  assert.equal(back.changed, false);
+  assert.match(back.error, /只能往前走/);
+
+  const skip = advancePhase(spec, "review");
+  assert.equal(skip.changed, false);
+  assert.match(skip.error, /不能跳着走/);
+
+  const bogus = advancePhase(spec, "shipping");
+  assert.equal(bogus.changed, false);
+  assert.match(bogus.error, /未知阶段/);
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log("场景一 文件名规整      ✓");
@@ -88,4 +109,5 @@ console.log("场景三 打开即推进      ✓");
 console.log("场景四 闸门只提示      ✓");
 console.log("场景五 状态卡文案      ✓");
 console.log("场景六 怪状态规整      ✓");
+console.log("场景七 显式推进        ✓");
 console.log("会话状态测试通过");
