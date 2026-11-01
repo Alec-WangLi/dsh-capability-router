@@ -121,6 +121,11 @@ async function step(handler, agentId, messages) {
   const saved = JSON.parse(fs.readFileSync(path.join(STATE_DIR, "sessions", "sess-4.json"), "utf8"));
   assert.equal(saved.phase, "build", "spec 由 openExpert 推进，build 由显式 phase 推进");
 
+  // 推进到 build 之后再开 worker：闸门必须闭嘴（它之前会拿旧状态喊「先别开工」）
+  const worker = await tool.execute({ name: "backend" }, { agent: { id: "sess-4" } });
+  assert.equal(worker.found, true);
+  assert.ok(!(worker.note ?? "").includes("需求还没确认"), `进 build 后不该再提醒需求未确认：${worker.note}`);
+
   const back = await tool.execute({ name: "intake", phase: "spec" }, { agent: { id: "sess-4" } });
   assert.match(back.note ?? "", /只能往前走/);
   const after = JSON.parse(fs.readFileSync(path.join(STATE_DIR, "sessions", "sess-4.json"), "utf8"));
