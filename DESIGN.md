@@ -101,7 +101,7 @@ DSH 原生有 `~/.dsh/.agent-presets/`（本机现有 liangshen / redteam / unre
 | `expert-router` | 匹配专家、注入 role、决定技能集 | **已完成**（`lib/router.js` + `pre-step` 注入） |
 | `provider` | `registerProvider` 接管目录，按专家技能集收窄 | **已完成**（`lib/narrow.js`，默认关闭，有代价） |
 | `gap` | 无专家匹配时提示；给候选或提议新建 | **已完成**（`lib/gap.js`，含「闲聊不打扰」判定） |
-| `forge` | 生成新专家包草案 | **未实现** |
+| `forge` | 生成新专家包草案 | **已完成**（`tools/forge.mjs`，必填参数 + 当场校验） |
 
 ### 文件地图
 
@@ -122,6 +122,7 @@ C:\Users\Alec\Documents\DeepSeekHermesData\DSH-capability-router dev\   ← 唯�
   test/experts.mjs      解析器与扫描器，九个场景
   test/router.mjs       匹配打分与三种结论，九个场景
   test/gap.mjs          任务判定与缺口文案，八个场景
+  test/forge.mjs        造专家：必填、id 规范、生成即可命中，七个场景
   test/narrow.mjs       收窄语义（含「仍可按名加载」），八个场景
   test/route.mjs        集成：一句话进来后模型看到什么变了，四个场景
   README.md             给用户看的用法
@@ -607,7 +608,7 @@ apply()     if (!enabled) return
 | 3 | 规则匹配器（触发词 + 描述），不调 LLM | 20 句话测命中率 > 70% | **完成**（`lib/router.js`，`npm run accept`） |
 | 4 | 命中后注入 role + 收窄技能目录 | 目录从 50 条降到 10 条左右 | **完成**（默认只注入 role；`narrow` 需显式打开） |
 | 5 | 未命中的提示 | 说"帮我做视频监控"，它该说"没有干这个的人" | **完成**（`lib/gap.js`） |
-| 6 | 造专家（可选，最后） | 缺口确认后生成 `expert.yml` 草案 | 未开始 |
+| 6 | 造专家（可选，最后） | 缺口确认后生成 `expert.yml` 草案 | **完成**（`tools/forge.mjs`，七个场景） |
 
 前 5 步做完就能感觉到差别。第 6 步才是原框架的 `forge`。
 

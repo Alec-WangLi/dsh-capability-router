@@ -1,6 +1,6 @@
 # dsh-capability-router
 
-> 状态：v0.4.0。v0.2.0 的检查点已在 DSH Desktop 0.2.1 上做过 A/B 对照（[DESIGN.md](./DESIGN.md) 第十节）；v0.3.0 加了专家包、规则匹配、角色注入与技能目录收窄。
+> 状态：v0.5.0。v0.2.0 的检查点已在 DSH Desktop 0.2.1 上做过 A/B 对照（[DESIGN.md](./DESIGN.md) 第十节）；v0.3.0 加了专家包、规则匹配、角色注入与技能目录收窄。
 > 设计取舍、宿主 API 实测记录、踩过的坑都在 [DESIGN.md](./DESIGN.md)。
 
 本机自研的 DSH 插件。解决两个问题：**agent 拿到一句含糊的需求就直接开干**，以及**技能装多了挑不准**。
@@ -19,9 +19,11 @@ test/smoke.mjs         假 ctx 跑 apply，九场景
 test/experts.mjs       解析器与扫描器，九场景
 test/router.mjs        匹配打分与三种结论，九场景
 test/gap.mjs           任务判定与缺口文案，八场景
+test/forge.mjs         造专家：必填、id 规范、生成即可命中
 test/narrow.mjs        收窄语义（含仍可按名加载），八场景
 test/route.mjs         集成：一句话进来后模型看到什么变了
 tools/match.mjs        匹配器验收集（a 回归 / b 口语 / c 探针）
+tools/forge.mjs        造专家：生成骨架 + 当场校验
 tools/dump-session.mjs 把 DSH 的多帧 zstd 会话日志 dump 成可读 JSONL
 DESIGN.md              设计文档：为什么这么做、宿主 API 实测、坑
 README.md              本文件
@@ -165,9 +167,23 @@ synonyms: [登录, 按钮, 表单, 首页, 弹窗, 滚动, 适配]
 
 `alwaysVisible` 是跨领域技能白名单：调研、Office、PDF 这类跟哪个专家都能撞上的，不进收窄范围。
 
+## 造一个新专家
+
+匹配落空、而且这活会反复出现时：
+
+```bash
+node tools/forge.mjs rtsp --name 流媒体工程师 \
+  --description "摄像头接入、推流、回放与存储" \
+  --triggers 摄像头,推流,RTSP,回放,目标检测 --skills pdf
+```
+
+写到 `<DSH_HOME>/capability-router/experts/<id>/`，写完当场用扫描器校验，不通过就不落盘。必填参数缺一个直接报错退出——不猜触发词、不编描述。
+
+顺序是：改 `role.md` → 人审 → 重启 DSH。
+
 ## 之后
 
-- **造专家**：缺口确认后生成 `expert.yml` 草案，人审过再落盘。
+- **缺口记录**：把「哪个领域反复没人接」记下来，据此决定先造哪个专家。
 - **否定式说法**：`没生效 / 没起作用 / 不起作用` 这一整类还没进词表，是当前匹配的已知短板。
 
 ## 安装方式
