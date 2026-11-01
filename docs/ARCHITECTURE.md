@@ -99,14 +99,18 @@ function apply(ctx) {
 
 ### ③ 会话状态
 
+> **v0.19.0 补**：`agent/pre-step` 每步都会进，但每步不一定还能看到人话——`lastUserPrompt()` 在长任务里会返回 `undefined`，原实现在那里直接返回，等于「第 2 步起整场静默」。现在按 `agentId` 缓存最后一次人话复用，状态卡改为「阶段变立刻说，否则每 10 步补一次」。详见 `docs/FEATURES.md` 第五节「长任务里不能只活第一步」与 `docs/EXPERIMENT-2026-11-02.md`。
+>
+> **v0.18.0 落地状态**：`phase` 已是 `idle / spec / build / review / deliver`（没有单独的 `intake` 阶段——打开接单专家即进 `spec`）。`project`、`experts` 已实现；`task`、`specConfirmed`、`updatedAt` 仍**未实现**——`spec → build` 目前靠模型显式交卷 `expert("intake", { phase: "build" })`，见 `docs/FEATURES.md` 第九节。
+
 ```js
 {
-  phase: "idle" | "intake" | "spec" | "build" | "review" | "deliver",
-  project: "<项目目录绝对路径>" | null,
-  experts: ["intake", "backend"],        // 本会话已加载过的专家
-  task: "<当前任务卡 id>" | null,
-  specConfirmed: false,
-  updatedAt: "…"
+  phase: "idle" | "spec" | "build" | "review" | "deliver",
+  project: "<项目目录绝对路径>" | null,   // 已实现
+  experts: ["intake", "backend"],          // 已实现：本会话已加载过的专家
+  task: "<当前任务卡 id>" | null,          // 未实现
+  specConfirmed: false,                    // 未实现
+  since: "…"                               // 已实现（替代 updatedAt）
 }
 ```
 
@@ -117,13 +121,14 @@ function apply(ctx) {
 ### ④ 阶段闸门：提示级，不是拦截
 
 ```text
-idle      任何专家都可以上场（闲聊、单次提问走这条）
-intake    只该有 intake 在场
-spec      需求产物已写，等用户确认
-build     specConfirmed === true 才允许实现类专家上场
-review    有交付物，按验收标准收口
-deliver   交付清单
+idle      任何专家都可以上场（闲聊、单次提问走这条）；worker 首次上场会提醒「先接单」
+spec      只做澄清与记录；worker 上场提醒「需求没确认，先别开工」
+build     按任务卡推进；收口时交给审查专家
+review    只核对不改代码；有交付物才进场
+deliver   交付核对清单：真装得上、真开得起来、README 写的是真原因
 ```
+
+（v0.18.0 去掉了设计稿里的独立 `intake` 阶段：接单只是 `spec` 的入口动作，单列一格会让状态机多一个永远只待一轮的格子。）
 
 **能力边界的如实说明**：宿主没有给插件「拦截工具调用」的钩子，所以我们拦不住模型直接写代码。闸门能做到的是：状态不对时，每轮注入一句事实——
 

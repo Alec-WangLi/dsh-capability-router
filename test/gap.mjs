@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { gapText, looksLikeTask } from "../lib/gap.js";
+import { gapText, looksLikeTask, secondaryText } from "../lib/gap.js";
 
 const catalog = {
   experts: [
@@ -50,7 +50,7 @@ const catalog = {
   assert.match(note, /分不清/);
   assert.match(note, /前端工程师/);
   assert.match(note, /排障工程师/);
-  assert.match(note, /问一句/);
+  assert.match(note, /先问用户一句/);
 }
 
 // 场景七：候选不足两个时不该冒充分不清
@@ -75,14 +75,40 @@ const catalog = {
         { expert: { id: "docs", name: "文档与写作" }, score: 2 },
       ],
     },
-    { experts: [] },
+    { experts: [{ id: "intake", name: "接单专家", kind: "intake" }] },
     "做个系统，界面和接口都要，还要文档",
   );
   assert.match(note, /跨领域/);
-  assert.match(note, /后端工程师\(3\.5\)/);
+  assert.match(note, /主：后端工程师（3\.5）/);
   assert.match(note, /expert\("intake"\)/);
   assert.match(note, /别自己一个领域一个领域串着硬扛/);
   assert.equal(gapText({ kind: "hit", expert: { id: "backend" } }, { experts: [] }, "x"), undefined, "命中仍然不说话");
+}
+
+// 场景十：有新项目但没命中具体专家 → 先说「先接单」，不是「没人干这个」
+// 2026-11-02 真实用例：首句「我想做一款Windows记账软件」整场静默，因为落空时
+// 旧逻辑先说「没有干这个的人」——而全新项目几乎必然落空，最常见的场景被说错了。
+{
+  const note = gapText(
+    { kind: "miss", candidates: [] },
+    { experts: [{ id: "intake", name: "接单专家", kind: "intake" }] },
+    "帮我做视频监控系统",
+  );
+  assert.match(note, /没命中具体专家/);
+  assert.match(note, /expert\("intake"\)/);
+  assert.doesNotMatch(note, /没有对口的专家/);
+}
+
+// 场景十一：主次——一句话压到两个领域时，副的那部分也得有人管
+{
+  assert.equal(secondaryText({ expert: { name: "数据与办公" } }), undefined, "没有副领域不说话");
+  const note = secondaryText({
+    expert: { name: "数据与办公" },
+    secondary: { expert: { name: "文档与写作" } },
+  });
+  assert.match(note, /主次/);
+  assert.match(note, /数据与办公/);
+  assert.match(note, /文档与写作/);
 }
 
 console.log("场景一 任务判定      ✓");

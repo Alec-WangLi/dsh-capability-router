@@ -207,9 +207,13 @@ const gapHandler = gapRun.handlers.get("agent/pre-step");
 
 const noExpert = [userMessage("prompt-gap1", "帮我做视频监控系统")];
 const gapDecision = await gapHandler({ messages: noExpert }, async () => ({ kind: "continue", messages: noExpert }));
-assert.equal(gapDecision.messages.length, 2, "派活但没对口专家应提示一句");
+assert.equal(gapDecision.messages.length, 2, "派活但没命中具体专家应提示一句");
 assert.equal(gapDecision.messages[1].source.kind, "capability-router-gap");
-assert.ok(gapDecision.messages[1].content[0].text.includes("没有对口的专家"));
+// 2026-11-02 复盘改动：全新项目几乎必然落空（触发词是「界面」「接口」，用户说的是
+// 「做一款记账软件」）。先说「没有干这个的人」等于把最常见的场景判错，
+// 所以有接单专家时，第一句是「先接单」而不是「没人接」。
+assert.ok(gapDecision.messages[1].content[0].text.includes("没命中具体专家"));
+assert.ok(gapDecision.messages[1].content[0].text.includes('expert("intake")'));
 
 const chitchat = [userMessage("prompt-gap2", "今天中午吃什么")];
 const chatDecision = await gapHandler({ messages: chitchat }, async () => ({ kind: "continue", messages: chitchat }));
@@ -225,6 +229,30 @@ assert.equal(hitDecision.messages.length, 1, "命中时不该再插缺口提示"
 
 const againGap = await gapHandler({ messages: gapDecision.messages }, async () => ({ kind: "continue", messages: gapDecision.messages }));
 assert.equal(againGap.messages.length, 2, "同一条消息只提示一次");
+
+// 场景十一之二：命中接单专家 → 补一句「接单不是终点」，且只补一次
+// 真实用例的失败不只是「没接单」，还有另一种形态：接完单自己全做了。
+{
+  const intakePrompt = [userMessage("prompt-intake", "我想做一款Windows记账软件，整体看起来简约大方。")];
+  const intakeDecision = await gapHandler({ messages: intakePrompt }, async () => ({ kind: "continue", messages: intakePrompt }));
+  assert.equal(intakeDecision.messages.length, 2, "真实首句应命中接单专家并补一句");
+  const intakeMsg = intakeDecision.messages[1];
+  assert.equal(intakeMsg.source.kind, "capability-router-intake");
+  assert.ok(intakeMsg.content[0].text.includes("接单不是终点"));
+  const intakeAgain = await gapHandler({ messages: intakeDecision.messages }, async () => ({ kind: "continue", messages: intakeDecision.messages }));
+  assert.equal(intakeAgain.messages.length, 2, "同一条消息不重复补");
+}
+
+// 场景十一之三：长任务书不参与路由
+// 子代理的第一条 user 消息是父代理写的任务书，不是人说的话。实测中它被判成
+// `hit docs（副：review）`，提示完全不相干——被点名的是任务书全文，不是需求。
+{
+  const book = "你是子代理。我会分四步给你任务：先读需求、再拆任务卡、再分派、最后核对。\n".repeat(20);
+  assert.ok(book.length > 400, "夹具要真的超过长度闸");
+  const bookPrompt = [userMessage("prompt-book", book)];
+  const bookDecision = await gapHandler({ messages: bookPrompt }, async () => ({ kind: "continue", messages: bookPrompt }));
+  assert.equal(bookDecision.messages.length, 1, "长任务书不该被当成一句话的需求来点名");
+}
 
 // 场景十二：落空的句子要记账，闲聊不记——它是「该先造哪个专家」的依据
 // 注意用 TEST_HOME：STATE_DIR 在模块加载时就定了，场景八之后的环境变量已经指向别处。

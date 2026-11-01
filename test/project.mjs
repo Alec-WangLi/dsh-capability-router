@@ -104,7 +104,9 @@ async function step(handler, agentId, messages) {
   assert.deepEqual(saved.experts, ["intake", "backend"]);
 
   const idle = await tool.execute({ name: "frontend" }, { agent: { id: "sess-3" } });
-  assert.equal(idle.note, undefined, "空闲会话没有闸门提醒");
+  // 2026-11-02 复盘：整场没打开过接单专家，直接叫领域专家开工，于是没有验收标准、
+  // 也没人收口。跳过接单是最容易犯的错，所以在 idle 的第一次开口说一句。
+  assert.match(idle.note ?? "", /还没接单/, "空闲会话第一次叫领域专家应提醒先接单");
   const fresh = JSON.parse(fs.readFileSync(path.join(STATE_DIR, "sessions", "sess-3.json"), "utf8"));
   assert.deepEqual(fresh.experts, ["frontend"]);
   assert.equal(fresh.phase, "idle");
@@ -175,6 +177,70 @@ async function step(handler, agentId, messages) {
   assert.ok(kinds.includes("capability-router-hint"));
 }
 
+// 场景八：长任务里宿主只给增量消息——找不到人话也要继续工作
+// 2026-11-02 实测：子代理一个任务跑 139 步，`runs.jsonl` 只写了 1 行、状态卡一次没进。
+// 根因是后续步的 messages 里不再带 `source.kind === "user"` 的消息，`lastUserPrompt()`
+// 返回 undefined，插件在 `if (prompt === undefined) return decision;` 处整场下班。
+{
+  const { ctx, handlers } = createFakeContext();
+  plugin.apply(ctx, {});
+  const handler = handlers.get("agent/pre-step");
+  const messages = [userMessage("p-long", "帮我做视频监控系统")];
+  await handler({ agent: { id: "sess-long" }, messages }, async () => ({ kind: "continue", messages }));
+
+  // 第二步：只剩工具日志，没有任何 kind === "user" 的消息
+  const toolOnly = [
+    {
+      role: "user",
+      id: "tool-1",
+      content: [{ type: "text", text: "命令输出：OK" }],
+      source: { kind: "tool-jobs" },
+    },
+  ];
+  const second = await handler({ agent: { id: "sess-long" }, messages: toolOnly }, async () => ({
+    kind: "continue",
+    messages: toolOnly,
+  }));
+  assert.ok(Array.isArray(second.messages), "找不到人话也不该崩");
+
+  const rows = fs
+    .readFileSync(path.join(STATE_DIR, "runs.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+    .filter((row) => row.session === "sess-long");
+  assert.ok(rows.length >= 2, `长任务的后续步骤也要记账，实际 ${rows.length} 行`);
+}
+
+// 场景九：长任务里状态卡按步数补，不是只说一次
+// 一条消息里模型连跑上百步，如果状态卡只在第一步贴一次，后面它早就忘了自己在哪个阶段。
+// 期望：同一条人话内，阶段变化立刻再说一次，否则每 STATE_EVERY(10) 步补一次。
+{
+  const { ctx, handlers, tools } = createFakeContext();
+  plugin.apply(ctx, {});
+  const tool = tools.find((definition) => definition.name === "expert");
+  const dir = fs.mkdtempSync(path.join(HOME, "long-"));
+  await tool.execute({ name: "intake", project: dir }, { agent: { id: "sess-long2" } });
+
+  const handler = handlers.get("agent/pre-step");
+  const first = [userMessage("p-l2", "继续做")];
+  let stateCount = 0;
+  for (let index = 0; index < 12; index += 1) {
+    // 第二步起 messages 里没有 kind === "user" 的消息——这正是宿主的增量形态
+    const input =
+      index === 0
+        ? first
+        : [{ role: "user", id: `tool-${index}`, content: [{ type: "text", text: "工具输出：OK" }], source: { kind: "tool-jobs" } }];
+    const decision = await handler({ agent: { id: "sess-long2" }, messages: input }, async () => ({
+      kind: "continue",
+      messages: input,
+    }));
+    const kinds = (decision.messages ?? []).map((message) => message.source?.kind);
+    if (kinds.includes("capability-router-state")) stateCount += 1;
+  }
+  assert.ok(stateCount >= 2, `12 步里状态卡至少要补一次，实际 ${stateCount} 次`);
+}
+
 fs.rmSync(HOME, { recursive: true, force: true });
 
 console.log("场景一 目录压制角色    ✓");
@@ -184,4 +250,5 @@ console.log("场景四 工具推进状态    ✓");
 console.log("场景五 project 可关    ✓");
 console.log("场景六 显式交卷        ✓");
 console.log("场景七 项目级阶段      ✓");
+console.log("场景八 长任务不早退    ✓");
 console.log("项目模式测试通过");

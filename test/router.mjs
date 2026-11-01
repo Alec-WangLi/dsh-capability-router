@@ -110,6 +110,40 @@ const expert = (id, extra) => ({
   assert.notEqual(weak.kind, "multi", "第三位没到线就不该算跨领域");
 }
 
+// 场景十一：入口专家让位——有别的专家过线时，接单专家不抢活
+// 2026-11-02 实测：「把这个需求文档改成给老板看的版本」被判成接单专家（4.0 > 文档 3.5），
+// 于是文档的活被接单专家接走了。入口专家是入口，不是竞争选手。
+{
+  const intake = expert("intake", { kind: "intake", triggers: ["需求", "需求文档", "做一款"] });
+  const docs = expert("docs", { triggers: ["需求文档", "改成"] });
+  const result = matchExpert("把这个需求文档改成给老板看的版本", [intake, docs]);
+  assert.equal(result.kind, "hit");
+  assert.equal(result.expert.id, "docs", "接单专家不该抢文档的活");
+
+  // 没有别人过线时，入口专家仍然该赢——全新项目就是从它开始的
+  const alone = matchExpert("我想做一款Windows记账软件", [expert("intake", { kind: "intake", triggers: ["做一款"] })]);
+  assert.equal(alone.expert.id, "intake");
+}
+
+// 场景十二：主次——头名明确，但副的那部分也得有人管
+{
+  const data = expert("data", { triggers: ["PPT", "记账"] });
+  const docs = expert("docs", { triggers: ["说明"] });
+  const result = matchExpert("帮我做个记账软件和一份说明PPT", [data, docs]);
+  assert.equal(result.kind, "hit");
+  assert.equal(result.expert.id, "data");
+  assert.equal(result.secondary?.expert.id, "docs", "被压掉的副领域要露头，不能悄悄消失");
+  assert.match(describeMatch(result), /副：docs/);
+
+  // 词面包含不算副领域：「数据」落在「数据库」里只是噪音。
+  const nested = matchExpert("数据库索引怎么加", [
+    expert("data", { triggers: ["数据"] }),
+    expert("backend", { triggers: ["数据库"] }),
+  ]);
+  assert.equal(nested.expert.id, "backend");
+  assert.equal(nested.secondary, undefined, "被头名词面包含的命中不算副领域");
+}
+
 console.log("场景一 权重上限      ✓");
 console.log("场景二 英文词边界    ✓");
 console.log("场景三 中文子串      ✓");
@@ -120,4 +154,6 @@ console.log("场景七 ambiguous     ✓");
 console.log("场景八 miss          ✓");
 console.log("场景九 描述兜底      ✓");
 console.log("场景十 multi         ✓");
+console.log("场景十一 入口让位    ✓");
+console.log("场景十二 主次        ✓");
 console.log("匹配器测试通过");

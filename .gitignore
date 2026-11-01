@@ -25,3 +25,11 @@ dump.jsonl
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# 临时分析脚本目录（不进仓库）
+.scratch/
+.scan/
+.capability-router/
+
+# 真实用例原始素材（含个人会话记录，只在本机）
+Real Test Data/

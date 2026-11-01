@@ -1,8 +1,8 @@
 name: 接单专家
 description: 把模糊需求收敛成需求文档与任务卡，再分派给对应的专家
 kind: intake
-triggers: [项目, 从零, 立项, 需求, 需求文档, 任务卡, 里程碑, 验收标准]
-synonyms: [平台, 应用, 规划, 拆解, 范围, 想要]
+triggers: [项目, 新项目, 从零, 立项, 需求, 需求文档, 任务卡, 里程碑, 验收标准, 做一款, 做一个, 做个, 想做, 搞一个, 开发, 搭一个, 小程序]
+synonyms: [平台, 应用, 规划, 拆解, 范围, 想要, 从零开始]
 handoff: [backend, frontend, data, docs, review]
 deliverables: [REQUIREMENTS.md, TASKS.md]
 skills:

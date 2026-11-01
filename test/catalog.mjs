@@ -49,9 +49,9 @@ const EXPERTS = [
   assert.match(text, /备用技能：research/);
   assert.match(text, /产出：接口定义、数据模型/);
   assert.match(text, /常交给：frontend、review/);
-  assert.match(text, /\*\*接单专家\*\*（intake，intake）/);
+  assert.match(text, /\*\*接单专家\*\*【入口】（intake，intake）/);
   assert.match(text, /expert\(name\)/);
-  assert.match(text, /大活先确认需求再挑人/);
+  assert.match(text, /新活先接单/);
   assert.equal(catalogText([]), "", "没有专家就不该往系统提示里塞空段");
 }
 
