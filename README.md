@@ -1,6 +1,6 @@
 # dsh-capability-router
 
-> 状态：v0.5.0。v0.2.0 的检查点已在 DSH Desktop 0.2.1 上做过 A/B 对照（[DESIGN.md](./DESIGN.md) 第十节）；v0.3.0 加了专家包、规则匹配、角色注入与技能目录收窄。
+> 状态：v0.6.0。v0.2.0 的检查点已在 DSH Desktop 0.2.1 上做过 A/B 对照（[DESIGN.md](./DESIGN.md) 第十节）；v0.3.0 加了专家包、规则匹配、角色注入与技能目录收窄。
 > 设计取舍、宿主 API 实测记录、踩过的坑都在 [DESIGN.md](./DESIGN.md)。
 
 本机自研的 DSH 插件。解决两个问题：**agent 拿到一句含糊的需求就直接开干**，以及**技能装多了挑不准**。
@@ -20,10 +20,12 @@ test/experts.mjs       解析器与扫描器，九场景
 test/router.mjs        匹配打分与三种结论，九场景
 test/gap.mjs           任务判定与缺口文案，八场景
 test/forge.mjs         造专家：必填、id 规范、生成即可命中
+test/gaps.mjs          缺口汇总工具：合并计数、坏行容错
 test/narrow.mjs        收窄语义（含仍可按名加载），八场景
 test/route.mjs         集成：一句话进来后模型看到什么变了
 tools/match.mjs        匹配器验收集（a 回归 / b 口语 / c 探针）
 tools/forge.mjs        造专家：生成骨架 + 当场校验
+tools/gaps.mjs         缺口汇总：哪个领域反复没人接
 tools/dump-session.mjs 把 DSH 的多帧 zstd 会话日志 dump 成可读 JSONL
 DESIGN.md              设计文档：为什么这么做、宿主 API 实测、坑
 README.md              本文件
@@ -181,10 +183,30 @@ node tools/forge.mjs rtsp --name 流媒体工程师 \
 
 顺序是：改 `role.md` → 人审 → 重启 DSH。
 
+## 看缺口
+
+每次没人接、或分不清时，原话会记进 `<状态目录>/gaps.jsonl`（配置 `gapLog`，默认开）。闲聊不记——判据和「要不要开口」是同一个。
+
+```bash
+npm run gaps           # 去重后按次数排序
+node tools/gaps.mjs --all
+node tools/gaps.mjs --json
+```
+
+输出长这样：
+
+```text
+× 2  帮我做视频监控系统
+      没人接  ·  最近 2026-11-01T10:01:00.000Z
+× 1  帮我写一下这个接口的文档
+      分不清/backend|docs  ·  最近 2026-11-01T10:03:00.000Z
+```
+
+同一句话出现三次，就是三次都没找到人接——那是该造专家的信号，不是该改匹配的信号。
+
 ## 之后
 
-- **缺口记录**：把「哪个领域反复没人接」记下来，据此决定先造哪个专家。
-- **否定式说法**：`没生效 / 没起作用 / 不起作用` 这一整类还没进词表，是当前匹配的已知短板。
+- **从缺口起草专家包**：`tools/forge.mjs` 已经能生成骨架并当场校验，还差一步从 `gaps.jsonl` 里挑出高频缺口直接起草。
 
 ## 安装方式
 

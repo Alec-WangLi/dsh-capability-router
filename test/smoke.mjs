@@ -223,6 +223,17 @@ assert.equal(hitDecision.messages.length, 1, "命中时不该再插缺口提示"
 const againGap = await gapHandler({ messages: gapDecision.messages }, async () => ({ kind: "continue", messages: gapDecision.messages }));
 assert.equal(againGap.messages.length, 2, "同一条消息只提示一次");
 
+// 场景十二：落空的句子要记账，闲聊不记——它是「该先造哪个专家」的依据
+// 注意用 TEST_HOME：STATE_DIR 在模块加载时就定了，场景八之后的环境变量已经指向别处。
+{
+  const ledger = path.join(TEST_HOME, "capability-router", "gaps.jsonl");
+  assert.ok(fs.existsSync(ledger), "应写出 gaps.jsonl");
+  const rows = fs.readFileSync(ledger, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  assert.ok(rows.some((row) => row.text === "帮我做视频监控系统" && row.kind === "miss"), "派活落空应记账");
+  assert.ok(rows.some((row) => row.text === "帮我写一下这个接口的文档" && row.kind === "ambiguous"), "分不清也记，但 kind 不同");
+  assert.ok(!rows.some((row) => row.text === "今天中午吃什么"), "闲聊不记账");
+}
+
 console.log("场景一 首次注入      ✓");
 console.log("场景二 同句去重      ✓");
 console.log("场景三 新句再注入    ✓");
@@ -234,4 +245,5 @@ console.log("场景八 配置写回      ✓");
 console.log("场景九 跨步去重      ✓");
 console.log("场景十 角色注入      ✓");
 console.log("场景十一 缺口提示    ✓");
+console.log("场景十二 缺口记账    ✓");
 console.log("冒烟测试通过");

@@ -123,6 +123,7 @@ C:\Users\Alec\Documents\DeepSeekHermesData\DSH-capability-router dev\   ← 唯�
   test/router.mjs       匹配打分与三种结论，九个场景
   test/gap.mjs          任务判定与缺口文案，八个场景
   test/forge.mjs        造专家：必填、id 规范、生成即可命中，七个场景
+  test/gaps.mjs         缺口汇总工具：合并计数、坏行容错，四个场景
   test/narrow.mjs       收窄语义（含「仍可按名加载」），八个场景
   test/route.mjs        集成：一句话进来后模型看到什么变了，四个场景
   README.md             给用户看的用法
@@ -609,6 +610,7 @@ apply()     if (!enabled) return
 | 4 | 命中后注入 role + 收窄技能目录 | 目录从 50 条降到 10 条左右 | **完成**（默认只注入 role；`narrow` 需显式打开） |
 | 5 | 未命中的提示 | 说"帮我做视频监控"，它该说"没有干这个的人" | **完成**（`lib/gap.js`） |
 | 6 | 造专家（可选，最后） | 缺口确认后生成 `expert.yml` 草案 | **完成**（`tools/forge.mjs`，七个场景） |
+| 7 | 缺口记账 | 能回答「先造哪个专家」 | **完成**（`gaps.jsonl` + `tools/gaps.mjs`） |
 
 前 5 步做完就能感觉到差别。第 6 步才是原框架的 `forge`。
 
