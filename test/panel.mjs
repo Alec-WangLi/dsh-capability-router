@@ -24,7 +24,6 @@ fs.mkdirSync(sessionsDir, { recursive: true });
       JSON.stringify({ at: "2026-11-01T10:01:00.000Z", session: "s1", phase: "spec", rout: "hit", expert: "intake", injected: ["capability-router-state"] }),
       "",
     ].join("\n"),
-    "utf8",
   );
   const runs = readRuns(file);
   assert.equal(runs.length, 2, "坏行应被跳过");
@@ -63,6 +62,24 @@ fs.mkdirSync(sessionsDir, { recursive: true });
   assert.equal(gaps[0].last, "2026-11-01T10:05:00.000Z");
   assert.deepEqual(gaps[1].candidates, ["backend", "data"]);
   assert.equal(gaps[1].kinds[0], "ambiguous");
+
+  // 阶段要跟着聚合：同一句话在「需求确认」和「实现」阶段落空，意思完全不同——
+  // 前者说明词表没收住需求，后者说明该补一个专家。v0.20.1 之前的老行没有 phase，空着。
+  assert.deepEqual(gaps[0].phases, [], "老行没有 phase 就是空数组，不是 undefined");
+  const phased = path.join(tmp, "gaps-phase.jsonl");
+  fs.writeFileSync(
+    phased,
+    [
+      JSON.stringify({ at: "2026-11-02T10:00:00.000Z", kind: "miss", text: "帮我搭个视频监控", phase: "build" }),
+      JSON.stringify({ at: "2026-11-02T10:01:00.000Z", kind: "miss", text: "帮我搭个视频监控", phase: "spec" }),
+      JSON.stringify({ at: "2026-11-02T10:02:00.000Z", kind: "miss", text: "帮我搭个视频监控", phase: "build" }),
+      JSON.stringify({ at: "2026-11-02T10:03:00.000Z", kind: "miss", text: "帮我搭个视频监控" }),
+    ].join(String.fromCharCode(10)),
+    "utf8",
+  );
+  const withPhase = readGaps(phased)[0];
+  assert.deepEqual(withPhase.phases, ["build", "spec"], "阶段去重且保序，缺的不占位");
+  assert.equal(withPhase.count, 4, "计数不受 phase 影响");
 }
 
 // 场景四：collect 把三份数据 + 体检结果装一起
@@ -89,6 +106,8 @@ fs.mkdirSync(sessionsDir, { recursive: true });
   assert.ok(html.includes("&lt;script&gt;"), "缺口原话必须转义");
   assert.ok(!html.includes("<script>alert(1)</script>"), "不该原样输出用户内容");
   assert.ok(html.includes("齐全"), "体检无缺口时应显示齐全");
+  // 缺口表要带阶段：同一句话在「需求确认」和「实现」阶段落空，意思完全不同。
+  assert.match(html, /<th>原话<\/th><th>次数<\/th><th>阶段<\/th>/, "缺口表要有阶段列（跟运行表的阶段列区分开）");
 
   const empty = renderHtml({ generatedAt: "x", sessions: [], runs: [], gaps: [] });
   assert.ok(empty.includes("还没有会话进入项目模式"));
