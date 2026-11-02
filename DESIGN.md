@@ -1174,3 +1174,19 @@ v0.21.0 把闸门、状态卡、缺口、提问提示都翻了，唯独漏了 `e
 顺带一条：`advancePhase` / `setLevel` 的 `error` 字符串是从 `lib/state.js` 里长出来的，翻的时候得把 `lang` 一路传下去（`advancePhase(state, target, lang)`）。漏传的症状是「外壳英文、括号里的原因中文」，最容易漏，因为报错路径平时不跑。
 
 ---
+
+#### 2026-11-02 追加（v0.21.2）：疑问不在标点里，在句子的开头
+
+`looksLikeQuestion` 第一版（中文）靠两件事：中文疑问词 + 句尾问号。翻译到英文时，两件事同时失效——英文问句可以一个标点都没有：`why does the export fail`、`how do I add a button`、`is it supposed to look like this`。
+
+失效的后果不是「少一句提示」，是**反的**：项目模式下判成「不是提问」等于判成「要改动」，模型会去改代码，而用户在问为什么。
+
+三条规矩：
+
+1. **疑问看句首，不看标点**。英文是 wh- 前置语言，`why / what / how / where / when / which / who` 以及 `is / are / does / do / did / should` 开头的句子，问句概率远高于祈使句。
+2. **前缀优先于词表**。`why does the export fail` 里有 `export`，`how do I fix the login bug` 里有 `fix`——按「有动词就算活」会全部判错。所以 wh- 开头先判提问，只有出现「要变的量」（`CHANGE_HINTS`）才翻回命令。
+3. **`can you` 不是疑问前缀**。`can you add a button` 是请求，是活。把它算成问句，等于让所有礼貌请求都停在那儿等一句「你要的是答案不是改动」。
+
+还有一条实现细节，值一个坑：**用词边界，不用子串**。`show me the file` 里有个 `how`（s-how），子串匹配会把展示文件判成提问。正则 `/^(why|...)/i` 是对的，`includes("how")` 是错的——这和十六.5 里 `so` 那条是同一类错误：**两三个字母的东西，在别人的句子里到处都是**。
+
+---

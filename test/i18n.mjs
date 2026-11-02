@@ -249,4 +249,31 @@ for (const phase of ["idle", "spec", "build", "review", "deliver"]) {
   assert.match(zhNote.note, /阶段提醒/, "中文会话不该冒出英文");
 }
 
-console.log("i18n: 10 场景 ok");
+
+// 场景十一：英文问句不一定有问号
+{
+  const { looksLikeQuestion } = await import("../lib/gap.js");
+  const asks = [
+    "why does the export fail",
+    "how do I add a button",
+    "what is the difference between these two",
+    "is it supposed to look like this",
+  ];
+  for (const sentence of asks) {
+    assert.equal(looksLikeQuestion(sentence), true, `英文问句要认得住（一个问号都没有）：${sentence}`);
+  }
+  const works = [
+    "add a delete button to the list",
+    "can you add a button",
+    "fix the login bug please",
+    "show me the file", // `show` 里有个 `how`，靠子串匹配会误判
+  ];
+  for (const sentence of works) {
+    assert.equal(looksLikeQuestion(sentence), false, `这不是提问，是要东西：${sentence}`);
+  }
+  // 中文那边一个字都不许变
+  assert.equal(looksLikeQuestion("这个按钮点下去为什么没反应？"), true);
+  assert.equal(looksLikeQuestion("能不能把这个按钮改大一点"), false, "委婉请求是活，不是提问");
+}
+
+console.log("i18n: 11 场景 ok");
