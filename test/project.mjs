@@ -306,6 +306,10 @@ async function step(handler, agentId, messages) {
   assert.equal(readProjectState().phase, "deliver", "要能推进到交付");
   assert.match(bothNotes.note ?? "", /已经交付/, "交付阶段的闸门要在");
   assert.match(bothNotes.note ?? "", /还没记为确认/, "确认提醒也要在——两条拼接，不是覆盖");
+  // 但交付阶段的提醒不能是 build/review 那一句：那句结尾是「还没敲定就先回去确认」，
+  // 活都干完了还叫人往回走，而且和「已经交付了，不用重新接单」并排像两条相反的命令。
+  assert.match(bothNotes.note ?? "", /这一版/, "交付阶段的确认提醒要说清是「这一版」，不是叫回去重来");
+  assert.doesNotMatch(bothNotes.note ?? "", /先回去确认/, "交付阶段不许出现「回去确认」——那是往回走");
 
   // A3 续四：显式确认之后，同一句提醒不该再出现（同阶段，不再推进）
   const confirmedNow = await tool.execute({ name: "intake", project: projectDir, approved: true, phase: "deliver" }, { agent: { id: "sess-10g" } });
