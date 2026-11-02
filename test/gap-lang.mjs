@@ -48,4 +48,17 @@ assert.equal(english.lang, "en", "英文落空要在账本上标出来");
 assert.ok(chinese !== undefined, "中文落空要记账");
 assert.equal(Object.hasOwn(chinese, "lang"), false, "中文是基线，旧行没有这个键，新行也别加");
 
+// 谁说出来的：`tools/gaps.mjs` 要把语言分布报出来。账本记了没人读等于没记——
+// 补不补英文词表，看的就是这一行的比例。
+{
+  const { execFileSync } = await import("node:child_process");
+  const out = execFileSync(process.execPath, ["tools/gaps.mjs"], {
+    cwd: new URL("..", import.meta.url),
+    env: { ...process.env, DSH_HOME: HOME },
+    encoding: "utf8",
+  });
+  assert.match(out, /按语言：中文 1 条 \/ 英文 1 条/, "要报出中英各几条");
+  assert.match(out, /非中文占 50%/, "要报出非中文的占比——那是补词表的判据");
+}
+
 console.log("gap-lang: ok");

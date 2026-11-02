@@ -71,6 +71,24 @@ if (sorted.length === 0) {
 }
 
 console.log(`缺口记录：${scope.length} 条，去重后 ${sorted.length} 种说法（${file}）`);
+// 语言分布：中文是基线，只有出现非中文时才单独说一行——英文落空率是补不补英文词表的唯一依据，
+// 但全中文的时候多印一行只会让人以为这里出了问题。
+{
+  let zh = 0;
+  let en = 0;
+  let other = 0;
+  for (const row of scope) {
+    const code = typeof row.lang === "string" && row.lang !== "" ? row.lang : "zh";
+    if (code === "zh") zh += 1;
+    else if (code === "en") en += 1;
+    else other += 1;
+  }
+  if (en + other > 0) {
+    const pct = Math.round(((en + other) / Math.max(scope.length, 1)) * 100);
+    const extra = other > 0 ? `、其他 ${other} 条` : "";
+    console.log(`按语言：中文 ${zh} 条 / 英文 ${en} 条${extra}（非中文占 ${pct}%）——补英文词表就看这个比例`);
+  }
+}
 console.log("");
 for (const entry of sorted.slice(0, 20)) {
   const tag = entry.kind === "ambiguous" ? `分不清/${entry.candidates.join("|")}` : "没人接";
