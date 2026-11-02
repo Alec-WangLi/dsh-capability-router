@@ -201,4 +201,52 @@ for (const phase of ["idle", "spec", "build", "review", "deliver"]) {
   assert.equal(matchExpert("she also said it works", list).kind, "miss", "闲聊不该判给逆向");
 }
 
-console.log("i18n: 9 场景 ok");
+
+// 场景十：expert() 的 note 也要跟语言走——闸门翻了、提醒没翻，等于半句话
+{
+  const fsx = await import("node:fs");
+  const home = fsx.mkdtempSync(path.join(os.tmpdir(), "i18n-note-"));
+  process.env.DSH_HOME = home;
+  const proj = path.join(home, "proj");
+  fsx.mkdirSync(proj, { recursive: true });
+  const plugin = await import("../lib/index.js");
+  const handlers = new Map();
+  let tool;
+  plugin.apply(
+    {
+      logger: { warn() {}, info() {} },
+      effect(apply) { apply(); },
+      on(name, handler) { handlers.set(name, handler); return () => {}; },
+      systemPrompt: { section() {} },
+      skills: { register: () => () => {} },
+      tools: { register(definition) { tool = definition; } },
+    },
+    {},
+  );
+  const pre = handlers.get("agent/pre-step");
+  const say = async (id, text) => {
+    const messages = [{ role: "user", id: `n${Math.random().toString(16).slice(2, 8)}`, content: [{ type: "text", text }], source: { kind: "user" } }];
+    await pre({ agent: { id }, messages }, async () => ({ kind: "continue", messages }));
+  };
+
+  await say("sess-en", "build me a small tool");
+  const enExec = { agent: { id: "sess-en" } };
+  const moved = await tool.execute({ name: "intake", project: proj, phase: "build" }, enExec);
+  assert.doesNotMatch(moved.note, /[一-鿿]/, "英文会话的推进提醒不该出现汉字");
+  assert.match(moved.note, /Stage note/, "英文会话要给自己看得懂的提醒");
+
+  const badLevel = await tool.execute({ name: "intake", project: proj, level: "x" }, enExec);
+  assert.doesNotMatch(badLevel.note, /[一-鿿]/, "英文会话的水平报错不该出现汉字");
+  assert.match(badLevel.note, /Level not recorded/);
+
+  const badReopen = await tool.execute({ name: "intake", project: proj, reopen: true }, enExec);
+  assert.doesNotMatch(badReopen.note, /[一-鿿]/, "英文会话的重开报错不该出现汉字");
+  assert.match(badReopen.note, /reopen only works/);
+
+  // 对照：中文会话一个字都不该变成英文
+  await say("sess-zh", "帮我做个小工具");
+  const zhNote = await tool.execute({ name: "intake", project: path.join(home, "p2"), phase: "build" }, { agent: { id: "sess-zh" } });
+  assert.match(zhNote.note, /阶段提醒/, "中文会话不该冒出英文");
+}
+
+console.log("i18n: 10 场景 ok");
