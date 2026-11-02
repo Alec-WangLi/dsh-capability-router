@@ -32,6 +32,12 @@ const CATALOG = {
   assert.equal(detectLang("123"), undefined);
   assert.equal(detectLang(""), undefined);
   assert.equal(detectLang(undefined), undefined, "非字符串也不能炸");
+  // 贴一行代码不该把中文会话切成英文。判据不是「有没有拉丁字母」——`const x = 1;` 全是拉丁字母。
+  // 看的是符号密度和有没有空白分隔。
+  assert.equal(detectLang("const x = 1;"), undefined, "一行代码不猜语言");
+  assert.equal(detectLang("app.use(router);"), undefined, "一行调用不猜语言");
+  assert.equal(detectLang("src/lib/index.js"), undefined, "一个路径不猜语言");
+  assert.equal(detectLang("DELETE"), undefined, "一个标识符不猜语言");
 }
 
 // 场景二：gapText 英文——项目模式两条分支都不带汉字
