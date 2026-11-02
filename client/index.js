@@ -27,7 +27,10 @@ window.__ModuleLoader__.load({
           minHeight: "420px",
           border: "0",
           borderRadius: "6px",
-          background: "#14161a",
+          // 不要写死底色：面板自己按 prefers-color-scheme 选浅色/深色，
+          // 这里钉一个 #14161a 就等于在浅色系统上给 iframe 镶一圈黑边。
+          background: "transparent",
+          colorScheme: "light dark",
         },
       });
     }

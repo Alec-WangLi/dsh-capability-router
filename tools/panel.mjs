@@ -8,7 +8,7 @@
  *   node tools/panel.mjs --dir D:/skills   # 额外扫技能目录（可重复）
  *
  * 端点：
- *   /            页面（5 秒自动刷新）
+ *   /            页面（8 秒局部轮询，不整页刷新——整页刷新会把滚动位置打回顶部）
  *   /api/state   JSON 快照，给别的壳（将来的 GUI client 半边）直接用
  *   /health      纯文本 ok，给守护脚本用
  *

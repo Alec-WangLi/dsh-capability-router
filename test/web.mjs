@@ -61,6 +61,19 @@ const options = { stateDir, dshHome: tmp };
   assert.equal(body.runs.length, 1);
   assert.ok(body.doctor !== undefined, "体检结果一起给出去");
   assert.ok(Array.isArray(body.experts) && body.experts.length > 0, "专家清单给 client 半边用");
+  // v0.22.0：专家名册要的是「认什么词、该产出什么、缺哪几个必装」，
+  // 只给 id/name/kind 的话面板只能画一行 id，「这个词归谁」答不了。
+  const roster = body.experts[0];
+  for (const key of ["id", "name", "kind", "triggers", "deliverables", "deps", "missing"]) {
+    assert.ok(Object.hasOwn(roster, key), `专家项缺 ${key} 键`);
+  }
+  assert.ok(Array.isArray(roster.triggers) && roster.triggers.length > 0, "触发词要带出来");
+  assert.ok(Array.isArray(roster.missing), "缺必装技能给数组，没缺就是空数组");
+  // 概览条要的版本与数据目录也在快照里；项目分组同样在。
+  assert.match(body.version, /^\d+\.\d+\.\d+$/, "版本号要透出");
+  assert.equal(body.stateDir, stateDir);
+  assert.ok(Array.isArray(body.projects), "项目分组要透出");
+  assert.equal(body.projects.length, 1, "s1 没有 project，自己成一组");
 
   // A13：每个会话项都要带 level 与 approved。
   // 这条有个坑：JSON.stringify 会把值为 undefined 的键整个丢掉，所以「未判定」必须
@@ -84,7 +97,7 @@ const options = { stateDir, dshHome: tmp };
   assert.equal(response.out.status, 200);
   assert.match(response.out.headers["content-type"], /text\/html/);
   assert.equal(response.out.headers["cache-control"], "no-store");
-  for (const section of ["会话阶段", "最近 25 步", "缺口队列", "技能供给"]) {
+  for (const section of ["项目阶段", "专家名册", "最近 25 句", "缺口队列", "技能供给"]) {
     assert.ok(response.out.body.includes(section), `缺区块：${section}`);
   }
 }
@@ -204,8 +217,24 @@ const options = { stateDir, dshHome: tmp };
   assert.equal(legacy.level, null, "level 未判定时显式给 null");
 }
 
-fs.rmSync(tmp, { recursive: true, force: true });
+// 场景九（v0.22.0）：配置进快照只留开关。面板要显示「哪些开关关着」，
+// 但 `resolved` 里还混着 `order`、`debug` 和用户 config.json 的任意键——
+// 这个快照是要经 HTTP 出去的，多一个字段就是多一条泄露面。
+{
+  const route = panelRoutes({
+    stateDir,
+    dshHome: tmp,
+    config: { web: true, gap: false, order: 5000, debug: true, apiToken: "sk-should-not-leak" },
+  }).find((row) => row.path === STATE_PATH);
+  const response = fakeResponse();
+  route.handler({ url: STATE_PATH }, response);
+  const body = JSON.parse(response.out.body);
+  assert.deepEqual(body.config, { web: true, gap: false, debug: true }, "只留布尔开关（debug 也是开关），顺序与值都原样");
+  assert.ok(!response.out.body.includes("sk-should-not-leak"), "配置里的非开关键不许进快照");
+  assert.ok(!response.out.body.includes("5000"), "order 不是开关，不该出去");
+}
 
+fs.rmSync(tmp, { recursive: true, force: true });
 console.log("场景一 路由形状      ✓");
 console.log("场景二 快照接口      ✓");
 console.log("场景三 页面接口      ✓");
@@ -214,4 +243,5 @@ console.log("场景五 挂载容错      ✓");
 console.log("场景六 会话参数      ✓");
 console.log("场景七 水平与确认    ✓");
 console.log("场景八 老记录补字段  ✓");
+console.log("场景九 配置只留开关  ✓");
 console.log("面板路由测试通过");
