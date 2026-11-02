@@ -265,6 +265,10 @@ async function step(handler, agentId, messages) {
   assert.equal(readProjectState().level, "novice", "level 要落盘");
   const noviceNote = await tool.execute({ name: "backend", project: projectDir }, { agent: { id: "sess-10b2" } });
   assert.match(noviceNote.note ?? "", /用户水平：新手/, "新手模式要传给干活的那位，不能只有接单专家知道");
+  // L3：光在 note 里说一句不够——角色提示词本身也得知道读者是谁，否则换个专家就忘了。
+  // 追加在 role 末尾，静态部分一个字不改（缓存前缀仍是同一份文本）。
+  assert.match(noviceNote.role ?? "", /这次的读者是新手/, "水平段要追加进角色提示词");
+  assert.match(noviceNote.role ?? "", /先问一句哪里不对/, "新手段要有具体做法，不是一句形容词");
   await tool.execute({ name: "intake", project: projectDir, level: "pro" }, { agent: { id: "sess-10b" } });
   assert.equal(readProjectState().level, "pro", "改水平要覆盖掉旧值");
 
@@ -273,6 +277,8 @@ async function step(handler, agentId, messages) {
   assert.match(dev.note ?? "", /先别开工/, "spec 阶段开领域专家要给闸门");
   assert.equal((dev.note ?? "").includes("先问一句用户想听多细"), false, "level 判定过就不该再问");
   assert.match(dev.note ?? "", /用户水平：老手/, "判成老手之后，开专家要直接给结论的指令");
+  assert.match(dev.role ?? "", /这次的读者是老手/, "改判老手之后 role 也要跟着换，别留着新手那段");
+  assert.doesNotMatch(dev.role ?? "", /这次的读者是新手/, "两段不该同时出现");
 
   // A3：推进到 build **不再**自动确认——approved 只认显式 true（P0-2 方案 X）
   const advanced = await tool.execute({ name: "intake", project: projectDir, phase: "build" }, { agent: { id: "sess-10d" } });
