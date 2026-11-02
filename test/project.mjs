@@ -355,10 +355,16 @@ async function step(handler, agentId, messages) {
     const ask = async (text, id) => {
       const messages = [{ role: "user", id, content: [{ type: "text", text }], source: { kind: "user" } }];
       const d = await askHandler({ agent: { id: "sess-10i" }, messages }, async () => ({ kind: "continue", messages }));
-      return d.messages.find((m) => m.source?.kind === "capability-router-hint");
+      return (kind) => d.messages.find((m) => m.source?.kind === kind);
     };
-    assert.match((await ask("这个按钮点下去为什么没反应？", "prompt-ask-1"))?.content[0].text ?? "", /这句是提问/, "项目模式下提问要有一句提醒");
-    assert.equal(await ask("帮我加一个导出 CSV 的按钮", "prompt-ask-2"), undefined, "任务句仍然只有状态卡，别撕注意力");
+    assert.match((await ask("这个按钮点下去为什么没反应？", "prompt-ask-1"))("capability-router-hint")?.content[0].text ?? "", /这句是提问/, "项目模式下提问要有一句提醒");
+    assert.equal((await ask("帮我加一个导出 CSV 的按钮", "prompt-ask-2"))("capability-router-hint"), undefined, "任务句仍然只有状态卡，别撕注意力");
+    // 副领域提示在项目模式下也要说：任务卡写的是事先分好的工，用户临时插进来的跨领域请求不在卡上。
+    assert.match(
+      (await ask("登录页的样式在窄屏下全乱了，顺便把接口也改一下", "prompt-ask-3"))("capability-router-secondary")?.content[0].text ?? "",
+      /别只交一半/,
+      "项目模式下跨领域的活也要提醒别只做一半",
+    );
   }
 
   // 状态说「按任务卡推进」，而项目目录里可能一份都没有。状态是插件记的、文档是模型写的，
