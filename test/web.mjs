@@ -96,6 +96,26 @@ const options = { stateDir, dshHome: tmp };
   assert.equal(data.experts.length, 10, "仓库自带十个专家包（v0.20.0 加了 research / reverse / qa）");
 }
 
+// 场景四之二：接口给的是「一句一行」，不是「一步一行」。
+// runs.jsonl 每步一行是设计如此，但原样吐给接口时 2000 行约 550 KB，里面一半是同一句话的重复。
+// 折叠发生在接口这一层；readRuns() 保持按步，`tools/match.mjs` 的口径没被动过。
+{
+  const foldDir = path.join(tmp, "fold-state");
+  fs.mkdirSync(path.join(foldDir, "sessions"), { recursive: true });
+  const rows = [];
+  for (let i = 0; i < 12; i += 1) {
+    rows.push({ at: `2026-11-02T03:0${i}:00.000Z`, session: "s9", promptId: "p-55", phase: "build", rout: "hit", expert: "backend", injected: i % 2 === 0 ? ["capability-router-state"] : [] });
+  }
+  rows.push({ at: "2026-11-02T03:20:00.000Z", session: "s9", promptId: "p-56", phase: "build", rout: "hit", expert: "docs", injected: [] });
+  fs.writeFileSync(path.join(foldDir, "runs.jsonl"), rows.map((row) => JSON.stringify(row)).join(String.fromCharCode(10)) + String.fromCharCode(10), "utf8");
+
+  const folded = snapshot({ stateDir: foldDir, dshHome: tmp });
+  assert.equal(folded.runs.length, 2, "十二步加一步要折成两句");
+  assert.equal(folded.runs[0].steps, 12, "折叠后的步数要带出来");
+  assert.equal(folded.runs[0].expert, "backend", "专家取最后一步");
+  assert.deepEqual(folded.runs[0].injected, ["capability-router-state"], "注入取并集");
+}
+
 // 场景五：挂载——注册两条路由；某条注册失败只告警，不影响另一条
 {
   const registered = [];
