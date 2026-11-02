@@ -23,7 +23,7 @@
 | 2 | **逆向与安全专家 `reverse`** | 新增专家包，`kind: worker`。脱壳、破解校验、协议还原、样本分析、hook。 |
 | 3 | **测试专家 `qa`** | 新增专家包，`kind: worker`。用例、回归、覆盖率、冒烟、E2E。补齐「完成度」的最后一环。 |
 | 4 | **用户水平 `level`** | 项目状态新增字段 `level: "novice" \| "pro" \| undefined`。接单第一问就问，用 `expert(id, {level})` 落盘；状态卡显示「用户水平：新手/老手/未判定」。 |
-| 5 | **方案确认 `approved`** | 项目状态新增 `approved: boolean`，默认 `false`。spec 阶段状态卡显示「方案：待确认」，并提示「用户说『直接做』才算确认」；推进到 build 自动置 `true`；`expert(id,{approved:false})` 可撤销。**软提示，不拦截。** |
+| 5 | **方案确认 `approved`** | 项目状态新增 `approved: boolean`，默认 `false`。spec 阶段状态卡显示「方案：待确认」，并提示「用户说『直接做』才算确认」；~~推进到 build 自动置 `true`~~；`expert(id,{approved:false})` 可撤销。**软提示，不拦截。**（v0.20.2 收敛：**只有显式 `{approved:true}` 才置真**，推进阶段不改它，只在不确认时补一句提醒） |
 | 6 | **接单流程改造** | `experts/intake/role.md` 增加三段：第一问问水平、先出 `PRIOR-ART.md` 再写需求、把需求反述成三句话让用户点头。 |
 | 7 | **检查点同步** | 「命令·新活」出口补一句：接单第一问是问用户想听多细，并用 `expert("intake",{level:...})` 记下。 |
 | 8 | **面板暴露** | `/api/state` 的 JSON 含 `level` 与 `approved`；项目卡/会话卡能看出「方案待确认」。 |
@@ -47,7 +47,8 @@
 |---|---|---|
 | **A1** | 新项目 `expert("intake")` 之后，`.capability-router/state.json` 含 `"approved": false` 且无 `level`；状态卡文本含「方案：待确认」「用户水平：未判定」 | 单测：构造 state 调 `stateCardText` |
 | **A2** | `expert("intake",{level:"novice"})` 后 state 的 `level === "novice"`，状态卡含「用户水平：新手」；`{level:"pro"}` 显示「老手」 | 单测 + `onOpen` 钩子测 |
-| **A3** | `expert("intake",{phase:"build"})` 后 `approved === true`，状态卡不再出现「待确认」 | 单测 |
+| **A3** | `expert("intake",{phase:"build"})` 后 `approved` **仍为 `false`**（推进阶段不等于用户拍板），且返回的 note 含「还没记为确认」；同一阶段重复交卷、或不传 `phase` 只开专家，note **不含**这句话 | 单测 `test/project.mjs` |
+| **A3b** | `expert("review")` 在 build 上由 `openExpert` 隐式把阶段推到 review，这条路径同样出「还没记为确认」——最常走的一步不能静默 | 单测 `test/project.mjs` |
 | **A4** | `expert("intake",{approved:false})` 后 `approved === false`，状态卡重新出现「待确认」 | 单测 |
 | **A5** | spec 阶段打开 `backend`，返回 note 含「先别开工」；若 `level` 未判定，同一 note 还含「先问一句用户想听多细」 | 单测 `gateNote` |
 | **A6** | spec 阶段打开 `research`，note 含 `PRIOR-ART.md` 且**不含**「先别开工」 | 单测 `gateNote` |
@@ -60,13 +61,15 @@
 | **A13** | `/api/state` 返回的 JSON 每一项含 `level` 与 `approved` | `test/web.mjs` 或 `test/panel.mjs` 加断言 |
 | **A14** | `enabled: false` 时不注入、不扫描、不挂钩，行为与未安装一致 | 现有 `test/smoke.mjs` 场景保持通过 |
 | **A15** | README 状态表到 v0.20.0；能力表新增「用户水平」「方案确认」两行；FEATURES.md 有对应小节；DESIGN.md 加一节「平台差异从哪来」 | 人工核对 + review |
+| **A16** | `expert()` 的 `phase.enum` 含 `deliver`。模型只读 `tool.parameters`，读不到 `PHASES`——schema 里没有这一步，模型根本走不进去 | 单测 `test/project.mjs` A7 断言 `phaseEnum.includes("deliver")` |
 
 ---
 
 ## 四、假设（我替你定的，可反驳）
 
 1. **`level` 只有一个值，不记翻转历史**。用户先要细节后要结论时，直接覆盖即可；记历史的价值低于实现成本。
-2. **`approved` 一旦推进到 build 就为真**。宣布「需求确认完了、开工」本身即视为用户拍板——否则每个项目都要多一轮显式确认，用户会烦。
+2. ~~**`approved` 一旦推进到 build 就为真**。宣布「需求确认完了、开工」本身即视为用户拍板——否则每个项目都要多一轮显式确认，用户会烦。~~
+   **v0.20.2 推翻**：这条把「模型挪阶段」记成了「用户点头」，而前者零成本、后者要花一次对话。改成只认显式 `{approved:true}`（决策记录见 `DESIGN.md` 第十六节第 1 条修正）。
 3. **`PRIOR-ART.md` 放项目根**，与 `REQUIREMENTS.md` 同级。理由：它是接单的输入物，不是实现产物，不该塞进 `docs/`。
 4. **`kind: scout` 是新取值**，只用于 research。目录里给「【调研】」标签，不进【入口】/【收口】。
 5. **接单强制先调 research 靠 role.md 约束**，插件不做流程强拦截——与现有「闸门是提示级」保持一致。
@@ -131,6 +134,6 @@ export function setApproved(state, approved)  // → { state, changed }
 **`lib/index.js`**
 
 - `onOpen` 顺序：先 `openExpert` → 再 `setLevel`/`setApproved`（显式参数优先）→ 再 `advancePhase` → 再按**推进后**状态算 `gateNote`。
-- 推进到 `build`/`review`/`deliver` 且未显式传 `approved` 时，自动 `approved: true`。
+- 推进阶段**不**自动置 `approved`。只有阶段真的变了（含 `openExpert` 的隐式推进）且推进到 `build`/`review`/`deliver` 而 `approved` 不是 `true` 时，note 追加一条补记提醒；提醒与 `gateNote` 同时成立时**拼接**，不互相覆盖。
 - 写盘判定条件从「phase 或 experts 变化」扩成「phase / experts / level / approved 任一变化」。
 - `HINT_TEXT` 的「命令 · 新活」出口追加：`接单第一问：用户想听细节还是直接上？问完用 expert("intake",{level:"novice"|"pro"}) 记下。`

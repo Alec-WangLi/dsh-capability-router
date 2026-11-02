@@ -221,7 +221,7 @@ apply():
   })
 
 expert(name, { project, phase, level, approved }):   // ④ 状态的唯一写入口
-  openExpert → setLevel → setApproved(显式) → advancePhase → 阶段真变了才自动 approved=true
+  openExpert → setLevel → setApproved(显式) → advancePhase → 阶段真变了且未确认才追加补记提醒（不自动置真）
   落盘 state.json（项目优先，会话留指针）→ 按推进后的状态算 gateNote → 返回 note
 ```
 

@@ -253,15 +253,18 @@ async function step(handler, agentId, messages) {
   const readProjectState = () => JSON.parse(fs.readFileSync(statePath, "utf8"));
 
   // A1：新项目接单 → approved: false；没人问过水平，就不该凭空写一个 level
-  await tool.execute({ name: "intake", project: projectDir }, { agent: { id: "sess-10a" } });
+  const freshOpen = await tool.execute({ name: "intake", project: projectDir }, { agent: { id: "sess-10a" } });
   const fresh = readProjectState();
   assert.equal(fresh.approved, false, "新项目默认未确认");
   assert.equal(fresh.phase, "spec");
   assert.equal(Object.hasOwn(fresh, "level"), false, "没问过水平就不该写 level");
+  assert.equal((freshOpen.note ?? "").includes("用户水平"), false, "没判定水平就别替用户猜");
 
   // A2：问过水平 → 落盘
   await tool.execute({ name: "intake", project: projectDir, level: "novice" }, { agent: { id: "sess-10b" } });
   assert.equal(readProjectState().level, "novice", "level 要落盘");
+  const noviceNote = await tool.execute({ name: "backend", project: projectDir }, { agent: { id: "sess-10b2" } });
+  assert.match(noviceNote.note ?? "", /用户水平：新手/, "新手模式要传给干活的那位，不能只有接单专家知道");
   await tool.execute({ name: "intake", project: projectDir, level: "pro" }, { agent: { id: "sess-10b" } });
   assert.equal(readProjectState().level, "pro", "改水平要覆盖掉旧值");
 
@@ -269,12 +272,39 @@ async function step(handler, agentId, messages) {
   const dev = await tool.execute({ name: "backend", project: projectDir }, { agent: { id: "sess-10c" } });
   assert.match(dev.note ?? "", /先别开工/, "spec 阶段开领域专家要给闸门");
   assert.equal((dev.note ?? "").includes("先问一句用户想听多细"), false, "level 判定过就不该再问");
+  assert.match(dev.note ?? "", /用户水平：老手/, "判成老手之后，开专家要直接给结论的指令");
 
-  // A3：推进到 build → 自动视为方案已确认
-  await tool.execute({ name: "intake", project: projectDir, phase: "build" }, { agent: { id: "sess-10d" } });
+  // A3：推进到 build **不再**自动确认——approved 只认显式 true（P0-2 方案 X）
+  const advanced = await tool.execute({ name: "intake", project: projectDir, phase: "build" }, { agent: { id: "sess-10d" } });
   const built = readProjectState();
   assert.equal(built.phase, "build");
-  assert.equal(built.approved, true, "推进到 build 且没显式传 approved 时自动确认");
+  assert.equal(built.approved, false, "推阶段不等于用户拍板，approved 不许自动置真");
+  assert.match(advanced.note ?? "", /还没记为确认/, "推进那一刻是把确认补记下来的最后机会，必须提一句");
+
+  // A3 续一：同一阶段重复交卷不算推进，不许提醒（否则从这步起每轮都念）
+  const againSame = await tool.execute({ name: "intake", project: projectDir, phase: "build" }, { agent: { id: "sess-10d" } });
+  assert.equal((againSame.note ?? "").includes("还没记为确认"), false, "同阶段重复交卷没推进阶段，不该提醒");
+
+  // A3 续二：不传 phase 只开专家，阶段没动，同样不许提醒
+  const justOpen = await tool.execute({ name: "backend", project: projectDir }, { agent: { id: "sess-10d" } });
+  assert.equal((justOpen.note ?? "").includes("还没记为确认"), false, "没推进阶段就别念确认");
+
+  // A3 续三：叫审查专家这一步，openExpert 自己会把 build 推到 review——这条路以前全程静默
+  const toReview = await tool.execute({ name: "review", project: projectDir }, { agent: { id: "sess-10j" } });
+  assert.equal(readProjectState().phase, "review", "开审查专家要把 build 推到 review");
+  assert.match(toReview.note ?? "", /还没记为确认/, "隐式推进也是推进，同样要提醒补记确认");
+  // A3 续三b：闸门与提醒同时成立时必须**拼接**。挑 deliver+worker：推进到交付会出
+  // 「已经交付了」的闸门，未确认会出补记提醒，两条都该在。只断言其中一条，
+  // 换成「提醒顶掉闸门」也照样绿——那等于用一句提醒换掉「交付后别再动」这条更硬的约束。
+  const bothNotes = await tool.execute({ name: "backend", project: projectDir, phase: "deliver" }, { agent: { id: "sess-10k" } });
+  assert.equal(readProjectState().phase, "deliver", "要能推进到交付");
+  assert.match(bothNotes.note ?? "", /已经交付/, "交付阶段的闸门要在");
+  assert.match(bothNotes.note ?? "", /还没记为确认/, "确认提醒也要在——两条拼接，不是覆盖");
+
+  // A3 续四：显式确认之后，同一句提醒不该再出现（同阶段，不再推进）
+  const confirmedNow = await tool.execute({ name: "intake", project: projectDir, approved: true, phase: "deliver" }, { agent: { id: "sess-10g" } });
+  assert.equal(readProjectState().approved, true, "显式 approved:true 要落盘");
+  assert.equal((confirmedNow.note ?? "").includes("还没记为确认"), false, "已确认就不该再催");
 
   // A4：显式撤销
   await tool.execute({ name: "intake", project: projectDir, approved: false }, { agent: { id: "sess-10e" } });
@@ -290,6 +320,25 @@ async function step(handler, agentId, messages) {
   assert.equal(scout.kind, "scout", "research 的 kind 要活到工具返回里");
   assert.match(scout.note ?? "", /PRIOR-ART\.md/);
   assert.equal((scout.note ?? "").includes("先别开工"), false, "调研专家不说先别开工");
+
+  // A7：deliver 有入口。以前 expert() 的 phase enum 里没有它，五个阶段里第五个进不去，
+  // 交付完的项目永远停在「按同一份验收标准逐条核对」——文案、面板配色、自动确认分支全在等它。
+  const deliverDir = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-deliver-"));
+  const readDeliver = () =>
+    JSON.parse(fs.readFileSync(path.join(deliverDir, ".capability-router", "state.json"), "utf8"));
+  await tool.execute({ name: "intake", project: deliverDir, approved: true, phase: "build" }, { agent: { id: "sess-10i" } });
+  await tool.execute({ name: "review", project: deliverDir, phase: "review" }, { agent: { id: "sess-10i" } });
+  const shipped = await tool.execute({ name: "review", project: deliverDir, phase: "deliver" }, { agent: { id: "sess-10i" } });
+  assert.equal(readDeliver().phase, "deliver", "审查通过后要能把阶段推到 deliver");
+  assert.equal((shipped.note ?? "").includes("阶段没有推进"), false, "deliver 是合法目标，不该报未知阶段");
+  // 上面两条只证明 advancePhase 支持 deliver——它本来就支持（PHASES 里有）。
+  // 真正会漏的是 schema：模型只看得见 tool.parameters，看不见 PHASES。
+  // enum 里没有 deliver，模型就不会想到「交付之后该把阶段推过去」，第五个阶段等于不存在。
+  const phaseEnum = tool.parameters?.properties?.phase?.enum ?? [];
+  assert.ok(phaseEnum.includes("deliver"), `phase 的 enum 要含 deliver，实际 ${JSON.stringify(phaseEnum)}`);
+  assert.ok(phaseEnum.includes("spec") && phaseEnum.includes("build") && phaseEnum.includes("review"), "原有三个阶段不许丢");
+  const stateApi = await import("../lib/state.js");
+  assert.match(stateApi.nextStep({ phase: "deliver" }), /交付核对/, "deliver 的下一步要指向交付核对");
 }
 
 fs.rmSync(HOME, { recursive: true, force: true });

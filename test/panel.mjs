@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { collect, readGaps, readRuns, readSessions, renderHtml } from "../lib/panel.js";
+import { collect, foldRuns, readGaps, readRuns, readSessions, renderHtml } from "../lib/panel.js";
 
 /**
  * 面板数据层测试：读坏文件不炸、缺口聚合对、渲染转义对。
@@ -165,6 +165,52 @@ fs.mkdirSync(sessionsDir, { recursive: true });
   assert.ok(loose.includes("方案：待确认｜水平：未判定"), "脏数据（字符串 true / 未知水平）一律按未确认 + 未判定");
 }
 
+// 场景八（L6）：运行记录按句折叠——55 步的一句在表里只能占一行
+{
+  const many = [];
+  for (let i = 0; i < 55; i += 1) {
+    many.push({
+      at: `2026-11-02T03:00:${String(i).padStart(2, "0")}.000Z`,
+      session: "s-a",
+      phase: "build",
+      promptId: "p-1",
+      rout: i === 0 ? "miss" : "hit",
+      expert: i === 0 ? undefined : "backend",
+      injected: i === 0 ? [] : ["capability-router-state"],
+    });
+  }
+  many.push({ at: "2026-11-02T03:01:00.000Z", session: "s-a", phase: "build", promptId: "p-2", rout: "hit", expert: "review", injected: [] });
+
+  const folded = foldRuns(many);
+  assert.equal(folded.length, 2, "两句只该出两行");
+  assert.equal(folded[0].steps, 55, "同一句 55 步要折成一行");
+  assert.equal(folded[0].rout, "hit", "路由取最后一步");
+  assert.equal(folded[0].expert, "backend", "专家名不能被前面那步的空值抹掉");
+  assert.deepEqual(folded[0].injected, ["capability-router-state"], "注入类型取并集");
+  assert.equal(folded[0].at, "2026-11-02T03:00:54.000Z", "时间取最后一次");
+  assert.equal(folded[1].steps, 1, "单步的就该是 1");
+
+  // 不同会话交错写进来：同 id 不相邻就不合并，否则会把别人那一步算到这句头上
+  const interleaved = [
+    { promptId: "x", session: "s1", at: "t1" },
+    { promptId: "y", session: "s2", at: "t2" },
+    { promptId: "x", session: "s1", at: "t3" },
+  ];
+  assert.equal(foldRuns(interleaved).length, 3, "不相邻的同 id 不许跨行合并");
+  assert.equal(foldRuns([{ at: "a" }, { at: "b" }]).length, 2, "缺 promptId 的老记录不许合并");
+
+  // 渲染层：先折叠再截断，否则 25 行会被一句话占满
+  const html = renderHtml({ generatedAt: "x", sessions: [], runs: many, gaps: [] });
+  assert.ok(html.includes("×55"), "折叠后的步数要显示出来");
+  assert.equal((html.match(/backend/g) ?? []).length, 1, "55 步在表里只占一行");
+
+  // 截断顺序：25 句进来，表里要出 25 行
+  const wide = [];
+  for (let i = 0; i < 30; i += 1) wide.push({ at: `2026-11-02T04:00:${String(i).padStart(2, "0")}.000Z`, session: "s-a", phase: "build", promptId: `w-${i}`, rout: "hit", expert: "backend", injected: [] });
+  const wideHtml = renderHtml({ generatedAt: "x", sessions: [], runs: wide, gaps: [] });
+  assert.equal((wideHtml.match(/backend/g) ?? []).length, 25, "折叠后截断，表里应有 25 句而不是 1 句");
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log("场景一 runs 读取      ✓");
@@ -174,4 +220,5 @@ console.log("场景四 collect 组装    ✓");
 console.log("场景五 渲染与转义      ✓");
 console.log("场景六 按会话过滤      ✓");
 console.log("场景七 方案与水平行    ✓");
+console.log("场景八 按句折叠        ✓");
 console.log("面板数据层测试通过");
