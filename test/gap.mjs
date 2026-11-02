@@ -146,11 +146,37 @@ const catalog = {
   }
 }
 
-// 场景十四（L1）：项目模式下闲聊仍然静默——克制这条不能因为改了门控就丢
+// 场景十四（L1，v0.20.19 重写）：闲聊的两套判据
+//
+// 原来这条断言的是「项目模式下闲聊也静默」。v0.20.19 推翻了它：真实 runs.jsonl 里
+// 197 行有 166 行一条注入都没有，「可以按你推荐」这种决策回复被静默吞掉——模型只能
+// 自己猜要不要把它当成新需求重开一轮。项目模式下「像不像一件活」不再是静默闸，
+// 而是**换个说法**：不像活 → 说「这是对上一个问题的回答」，不像活也不再提补专家。
+//
+// 真正要守的克制拆成两条：
+//   一、没接单（idle / 不传 phase）时闲聊照样静默，别在闲聊上打扰人；
+//   二、项目模式下说的必须是「别重开一轮」，不是「这块该补个专家」。
 {
   const withIntake = { experts: [{ id: "intake", name: "接单专家", kind: "intake" }] };
-  assert.equal(gapText({ kind: "miss", candidates: [] }, withIntake, "今天中午吃什么", { phase: "build" }), undefined);
-  assert.equal(gapText({ kind: "miss", candidates: [] }, withIntake, "嗯", { phase: "spec", phaseLabel: "需求确认" }), undefined);
+  const miss = { kind: "miss", candidates: [] };
+
+  // 一、没接单：静默（这条不受 v0.20.19 影响，是原来就要守的）
+  assert.equal(gapText(miss, withIntake, "今天中午吃什么"), undefined, "没接单时闲聊要静默");
+  assert.equal(gapText(miss, withIntake, "今天中午吃什么", { phase: "idle" }), undefined, "phase:idle 等同于没接单");
+
+  // 二、项目模式：闲聊不再静默，但说的是「接住它、别重开」，不是「该补专家」
+  const chat = gapText(miss, withIntake, "今天中午吃什么", { phase: "build", phaseLabel: "实现" });
+  assert.ok(typeof chat === "string", "项目模式下闲聊要给一句，不能静默");
+  assert.match(chat, /不像新活/, "要指出这句不像一件活");
+  assert.match(chat, /回答或一个决定/, "要说清它更可能是对上一步的回答");
+  assert.match(chat, /别当成新需求重开一轮/, "要拦住「重开一轮」这个错动作");
+  assert.doesNotMatch(chat, /补一个专家/, "不像活的时候别提补专家——它没活可派");
+  assert.match(chat, /实现/, "要说清现在处在哪个阶段");
+
+  // 三、项目模式下「像活」的走原来那条，说的是补专家
+  const work = gapText(miss, withIntake, "帮我把导出的按钮挪到左边", { phase: "build", phaseLabel: "实现" });
+  assert.match(work, /没命中具体专家/, "像活的还是原来那条");
+  assert.match(work, /补一个专家/, "像活的时候才提补专家");
 }
 
 // 场景十五（L1）：multi / ambiguous 的文案不受 options 影响（逐字相同）
@@ -280,6 +306,6 @@ console.log("场景十七 派单书不再选人 ✓");
 console.log("场景十六 提问与派活   ✓");
 console.log("场景十二 项目模式文案 ✓");
 console.log("场景十三 idle 逐字相同 ✓");
-console.log("场景十四 闲聊仍静默  ✓");
+console.log("场景十四 闲聊两套判据  ✓");
 console.log("场景十五 跨领域不受影响 ✓");
 console.log("缺口提示测试通过");

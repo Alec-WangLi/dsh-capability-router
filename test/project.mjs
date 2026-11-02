@@ -509,6 +509,54 @@ async function step(handler, agentId, messages) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
+// 场景十三（v0.20.19）：决策回复不是闲聊，别静默吞掉。
+// 真实 runs.jsonl 197 行里 166 行没有任何注入。被吞掉的不是废话——
+// 「可以按你推荐。」是对上一个问题的回答，模型看不到「这是回答、不是新需求」这句话，
+// 就只能自己猜要不要重开一轮。项目模式下「像不像一件活」不再是静默闸，而是换个说法。
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-decision-"));
+  fs.writeFileSync(path.join(dir, "REQUIREMENTS.md"), "# 需求\n");
+  fs.writeFileSync(path.join(dir, "TASKS.md"), "# 卡\n");
+  const { ctx, handlers, tools } = createFakeContext();
+  plugin.apply(ctx, {});
+  const sess = "sess-13";
+  await tools[0].execute({ name: "intake", project: dir, approved: true, phase: "build" }, { agent: { id: sess } });
+  const handler = handlers.get("agent/pre-step");
+  const ask = async (pid, text) => {
+    const decision = await step(handler, sess, [userMessage(pid, text)]);
+    return decision.messages
+      .filter((m) => m.source?.kind?.startsWith("capability-router"))
+      .map((m) => m.source.kind);
+  };
+
+  // 同一句两步：第 1 步状态卡占位（它优先），第 2 步该轮到缺口提示。
+  const first = await ask("p13-a", "可以按你推荐。");
+  const second = await ask("p13-a", "可以按你推荐。");
+  assert.ok(first.includes("capability-router-state"), `第 1 步该贴状态卡，实际：${first.join(",")}`);
+  assert.ok(
+    second.includes("capability-router-gap"),
+    `决策回复第 2 步要拿到「这是回答不是新活」那句，实际：${second.join(",") || "（无）"}`,
+  );
+  assert.ok(
+    !second.includes("capability-router-state"),
+    `状态卡这一轮该让位（一条消息只补一条），实际：${second.join(",")}`,
+  );
+
+  // 对照：没接单时的闲聊仍然静默——这条克制不能被顺手一起放开。
+  const { ctx: ctx2, handlers: h2 } = createFakeContext();
+  plugin.apply(ctx2, {});
+  const idleDecision = await step(h2.get("agent/pre-step"), "sess-13-idle", [userMessage("p13-b", "今天中午吃什么")]);
+  const idleKinds = idleDecision.messages
+    .filter((m) => m.source?.kind?.startsWith("capability-router"))
+    .map((m) => m.source.kind);
+  assert.ok(
+    !idleKinds.includes("capability-router-gap"),
+    `没接单时闲聊要静默，实际：${idleKinds.join(",")}`,
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 fs.rmSync(HOME, { recursive: true, force: true });
 
 console.log("场景一 目录压制角色    ✓");
@@ -523,4 +571,5 @@ console.log("场景九 长任务补状态卡  ✓");
 console.log("场景十 水平与确认落盘  ✓");
 console.log("场景十一 提问独占总线  ✓");
 console.log("场景十二 派单书不选人  ✓");
+console.log("场景十三 决策回复不静默 ✓");
 console.log("项目模式测试通过");
