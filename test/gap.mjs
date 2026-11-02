@@ -244,6 +244,15 @@ console.log("场景九 跨领域        ✓");
   // 中文身份声明，且带 markdown 加粗——不去标记就一条都认不出来
   assert.equal(explicitExpert("身份：**审查专家**。项目目录 x", fake)?.id, "review");
   assert.equal(explicitExpert("你是后端工程师，把接口补上", fake)?.id, "backend");
+  // 反例：在确认身份 / 在引用别人的话——都不是指派。
+  // 「你是后端工程师吧，帮我看下这个接口为什么 500」是提问；判成指派会让它失去后端的 role 注入。
+  assert.equal(explicitExpert("你是后端工程师吧，帮我看下这个接口为什么返回 500", fake), undefined);
+  assert.equal(explicitExpert("我记得你说你是后端工程师，那这个接口归谁改？", fake), undefined);
+  assert.equal(explicitExpert("你是后端工程师？", fake), undefined);
+  // 正例：逗号/句号后面接的是活，仍算指派
+  assert.equal(explicitExpert("你是后端工程师，帮我把接口补上", fake)?.id, "backend");
+  assert.equal(explicitExpert("你是后端工程师。项目目录 C:/w", fake)?.id, "backend");
+
   // 反例：只是提到这个领域，没有点名让谁干
   assert.equal(explicitExpert("帮我把接口补上，前端也要改", fake), undefined);
   assert.equal(explicitExpert("作为一个审查专家，我觉得还行", fake), undefined);
