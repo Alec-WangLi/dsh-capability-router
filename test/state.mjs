@@ -79,6 +79,13 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-state-"));
   assert.equal(normalizeState({ phase: "whatever" }).phase, "idle");
   assert.deepEqual(normalizeState({ phase: "build", experts: [1, "backend", null] }).experts, ["backend"]);
   assert.equal(normalizeState(null).phase, "idle");
+  // reopenedAt 同样是外部输入：状态文件可能被人手改、被旧版本写过、被别的脚本碰过。
+  // 只认非空字符串，其余（数字、空串、对象）一律不带这个键——
+  // 带个假日期进状态卡，比不带更糟：它看起来像事实。
+  assert.equal("reopenedAt" in normalizeState({ phase: "build", reopenedAt: 20261102 }), false, "数字不算重开时间");
+  assert.equal("reopenedAt" in normalizeState({ phase: "build", reopenedAt: "" }), false, "空串不算");
+  assert.equal("reopenedAt" in normalizeState({ phase: "build", reopenedAt: { at: 1 } }), false, "对象不算");
+  assert.equal(normalizeState({ phase: "build", reopenedAt: "2026-11-02T04:59:56.069Z" }).reopenedAt, "2026-11-02T04:59:56.069Z");
 }
 
 // 场景七：显式推进——只能往前走一格，回退与跳级都拒绝并给出原因

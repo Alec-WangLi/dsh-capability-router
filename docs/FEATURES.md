@@ -31,11 +31,12 @@ agent/pre-step（本插件在这里）
 工具那条路走的是另一个入口，不经过 pre-step：
 
 ```text
-模型调 expert(name, {level, approved, phase, project})
+模型调 expert(name, {level, approved, phase, project, reopen})
    ├─ 1. 打开专家：接单 → 进 spec，其余只记进「在场专家」   openExpert()
    ├─ 2. 记用户水平（novice / pro）                        setLevel()      v0.20.0
    ├─ 3. 记显式 approved（false 是撤销）                   setApproved()   v0.20.0
-   ├─ 4. 显式推进阶段（只能往前）                          advancePhase()
+   ├─ 4. 重开：deliver → build，记 reopenedAt              v0.20.14
+   ├─ 4b. 显式推进阶段（只能往前）                         advancePhase()
    ├─ 5. 不自动确认：approved 只认显式 {approved:true}       v0.20.2
    └─ 6. 落盘 state.json → 按推进后的状态算闸门 note → 下一步的状态卡
 ```
@@ -576,6 +577,20 @@ v0.20.3 补的是第三行。在此之前 `level` 只有 `experts/intake/role.md
 | `expert(id, { approved: false })` | 撤销 |
 
 **边界在哪**：它是软提示。`approved: false` 不拦任何动作，只让状态卡多一句「方案：待确认」。理由是用户说「直接做」是最常见的确认方式，硬拦等于用流程惩罚一个已经想清楚的人（决策记录见 [DESIGN.md](../DESIGN.md) 第十六节第 1 条，及其 v0.20.2 修正）。
+
+### 重开（`reopen`，v0.20.14）
+
+`advancePhase()` 从来只许往前，`deliver` 是终点：进得去、出不来。这条规矩是对的——**阶段是闸门的主语**，`gateNote` 每一句都由 phase 决定，phase 能随手改就等于闸门能被模型自己绕过。代价是「交付之后想回头改」只能另建项目目录，项目文件、任务卡、验收记录全断在半路。
+
+折中是留一个**必须说出口、且会留痕**的入口：
+
+| 触发 | 结果 |
+|---|---|
+| `expert(id, { project, reopen: true })` 且当前 `deliver` | 阶段退回 `build`，状态里记 `reopenedAt`，note 说「已重开……这次的改动不在上一轮的验收范围里」 |
+| `reopen: true` 但不在 `deliver` | 阶段不动，note 明说「reopen 只对已交付的项目有效：当前在「实现」阶段，没有重开」 |
+| 重开后再传 `phase: "spec"` | 照旧被 `advancePhase` 拒绝：「阶段只能往前走」——`reopen` 是唯一一次后退，不是万能回退键 |
+
+状态卡完整版多一段「｜重开于 11-02」（超长的短版不带它：重开是当场就知道的事，状态卡只负责让后来的人看见「退过」）。
 
 只认严格布尔：`"true"`、`1` 都不算确认。状态文件是外部输入，宽容解析在这里只会制造假阳性。
 

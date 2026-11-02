@@ -116,6 +116,7 @@ function apply(ctx) {
   project: "<项目目录绝对路径>" | null,   // 已实现
   level: "novice" | "pro",                 // 已实现（v0.20.0）：未判定时整个键不存在
   approved: false,                         // 已实现（v0.20.0）：方案是否被用户点头，恒为布尔
+  reopenedAt: "2026-11-02T04:59:56.069Z",  // 已实现（v0.20.14）：交付后重开的时刻，只在重开过时出现
   experts: ["intake", "backend"],          // 已实现：本会话已加载过的专家
   task: "<当前任务卡 id>" | null,          // 未实现
   specConfirmed: false,                    // 未实现——由 approved 取代
@@ -220,7 +221,7 @@ apply():
     记 runs.jsonl
   })
 
-expert(name, { project, phase, level, approved }):   // ④ 状态的唯一写入口
+expert(name, { project, phase, level, approved, reopen }):   // ④ 状态的唯一写入口
   openExpert → setLevel → setApproved(显式) → advancePhase → 阶段真变了且未确认才追加补记提醒（不自动置真）
   落盘 state.json（项目优先，会话留指针）→ 按推进后的状态算 gateNote → 返回 note
 ```

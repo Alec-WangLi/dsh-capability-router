@@ -353,6 +353,24 @@ async function step(handler, agentId, messages) {
   const recheck = await tool.execute({ name: "review", project: deliverDir }, { agent: { id: "sess-10k" } });
   assert.match(recheck.note ?? "", /核的是哪一版/, "交付后复核要先分清核的是哪一版");
 
+  // 交付之后想回头改：不放开 advancePhase 的后退（阶段是闸门的主语，能随手拨回就等于没有闸门），
+  // 但「只能另建项目目录」也确实别扭。折中是留一个必须说出口、且会留痕的入口。
+  const reopened = await tool.execute({ name: "intake", project: deliverDir, reopen: true }, { agent: { id: "sess-10l" } });
+  assert.equal(readDeliver().phase, "build", "reopen 要把交付退回实现");
+  assert.match(readDeliver().reopenedAt ?? "", /^\d{4}-\d{2}-\d{2}T/, "重开要留痕，否则和一次正常推进长得一样");
+  assert.match(reopened.note ?? "", /已重开/, "重开要明说，别悄悄退回去");
+  assert.match(stateApi.stateCardText(readDeliver()), /重开于/, "状态卡要让后来的人看见退过");
+
+  // 不在交付状态时 reopen 无效——而且要说清楚无效，不能静默吞掉（v0.20.5 的老毛病）
+  const reopenAgain = await tool.execute({ name: "intake", project: deliverDir, reopen: true }, { agent: { id: "sess-10l" } });
+  assert.equal(readDeliver().phase, "build", "非交付状态 reopen 不许改阶段");
+  assert.match(reopenAgain.note ?? "", /只对已交付的项目有效/, "reopen 没用上也要说一声");
+
+  // 退回去之后仍然只能往前走：reopen 是唯一一次后退，不是万能回退键
+  const noBack = await tool.execute({ name: "intake", project: deliverDir, phase: "spec" }, { agent: { id: "sess-10l" } });
+  assert.equal(readDeliver().phase, "build", "build 不许退回 spec");
+  assert.match(noBack.note ?? "", /阶段只能往前走/, "后退要被明确拒绝");
+
   // 项目模式下检查点整体让位给状态卡，但「这句是提问」不能跟着让位。
   // 实测：提问（为什么没反应）/ 命令（加个按钮）/ 征询（有什么风险）拿到的注入一字不差，
   // 全是「下一步：按任务卡推进」——模型看见这句就会把提问也当成开工信号。
