@@ -167,6 +167,27 @@ agent/pre-step（本插件在这里）
 - **`multi` 也不是错误**：一句话同时要前端、后端、文档时，唯一正确的答案是「这是三个领域的活」。判据是**双条件**——够多（≥3 位过线）且每一位都明显过线（≥1.5，即至少一个两字触发词的权重）。只数个数会把「给用户表加个索引，查询太慢了」判成跨领域，那里的 `data` / `debug` 只是词面噪音；这条规则是踩了一次 a 集回归（20/20 → 18/20）才收紧的。
 - `multi` 时 `verdict.expert` 是 `undefined`：插件不给答案，只描述问题（缺口提示会指向接单专家）。
 
+### 英文召回：十二类场景（v0.21.5）
+
+英文触发词不是「补得越多越好」，是按**场景类别**补。下表是回归用的十二句，`test/experts-v3.mjs` 场景七逐句断言：
+
+| 句子 | 归谁 | 缺的是什么词 |
+|---|---|---|
+| `build me a small tool that renames photos by date` | intake | `build me`、`a small tool`（新项目的口语开场） |
+| `the login page breaks on narrow screens` | frontend | `login page`、`narrow screen`（页面名比「界面」具体） |
+| `add a delete button to the list` | frontend | 已有 `button` |
+| `the api returns 500 when saving the form` | backend | 已有 `api`、`server-side` |
+| `why does the export fail` | debug | `why does`（英文疑问前缀） |
+| `this csv has duplicate rows` | data | 已有 `csv` |
+| `the app crashes on start` | debug | `crash` + **词形 `crashes`** |
+| `crack the license check in this binary` | reverse | 已有 `crack`、`license check` |
+| `unpack this apk and find the api key` | reverse | 已有 `apk`、`unpack` |
+| `write a proposal for the new dashboard` | docs | `write a proposal`、`proposal for`（比单个 `proposal` 权重高，压过 `dashboard` 的 data 分） |
+| `the tests are flaky on ci` | qa | 已有 `flaky`、`tests` |
+| `summarize this spreadsheet into a report` | data | 已有 `spreadsheet`、`report` |
+
+**词形变化**：`termHit` 的词边界放行 `(s|es|ed|ing)?`，所以 `crash` 认 `crashes`、`fail` 认 `fails`；但仍不放回子串匹配——`so` 不许命中 `slow`、`latest` 里的 `test` 不算。
+
 ### 派单书自己点了人（v0.20.17）
 
 派单书长这样：「你现在的身份是**后端工程师**（用 `expert("backend")` 取完整工作方式后照它做事）。项目目录：`C:/work/proj`。任务：把接口补上，前端那边要对接。」

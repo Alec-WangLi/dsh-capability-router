@@ -143,6 +143,40 @@ check("场景六 三句探针命中新专家（A8）", () => {
   }
 });
 
+// 场景七（v0.21.5）：英文召回。十二句真实英文需求各归各位。
+// 为什么要有这一条：v0.21.0 给十位专家补了英文触发词，但没人验过「十二句里落得中几句」——
+// 补词不等于接得住。第一版实测 12 句里 4 句 miss、1 句 ambiguous，全都补完之后才 12/12。
+check("场景七 英文需求落到对的人（v0.21.5）", () => {
+  const probes = [
+    ["build me a small tool that renames photos by date", "intake"],
+    ["the login page breaks on narrow screens", "frontend"],
+    ["add a delete button to the list", "frontend"],
+    ["the api returns 500 when saving the form", "backend"],
+    ["why does the export fail", "debug"],
+    ["this csv has duplicate rows", "data"],
+    ["the app crashes on start", "debug"],
+    ["crack the license check in this binary", "reverse"],
+    ["unpack this apk and find the api key", "reverse"],
+    ["write a proposal for the new dashboard", "docs"],
+    ["the tests are flaky on ci", "qa"],
+    ["summarize this spreadsheet into a report", "data"],
+  ];
+  for (const [text, expected] of probes) {
+    const result = matchExpert(text, experts);
+    assert.equal(result.kind, "hit", `「${text}」应命中 ${expected}，实际 ${result.kind}`);
+    assert.equal(result.expert.id, expected, `「${text}」应命中 ${expected}，实际 ${result.expert?.id}`);
+  }
+});
+
+// 场景八（v0.21.5）：英文有词形变化，词边界要放行屈折尾巴。
+// `crashes` 里 `crash` 后面跟着字母，严格词边界会判成「不认识」——英文需求一半是这种句子。
+// 但也不能退回子串匹配，否则 `so` 会命中 `slow`（十六·5 栽过一次）。
+check("场景八 词形变化认得，子串误配不认得（v0.21.5）", () => {
+  assert.equal(matchExpert("the app crashes on start", experts).expert?.id, "debug", "crashes 要认得 crash");
+  assert.equal(matchExpert("the build fails on ci", experts).kind, "hit", "fails 要认得 fail");
+  assert.notEqual(matchExpert("this is also slow but fine", experts).expert?.id, "reverse", "slow 里没有 so 这个专家");
+});
+
 if (failures.length > 0) {
   console.error(`\n失败 ${failures.length}/${total} 项：`);
   for (const [name, error] of failures) {

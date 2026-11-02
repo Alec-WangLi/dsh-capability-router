@@ -1,6 +1,6 @@
 name: 文档与写作
 description: 文档、方案、汇报、对外文字
-triggers: [文档, README, 设计文档, 需求, 方案, 汇报, 总结, 邮件, 周报, 写作, 改稿, 说明, 提案, 公告, "readme", "documentation", "proposal", "changelog", "user guide", "write-up"]
+triggers: [文档, README, 设计文档, 需求, 方案, 汇报, 总结, 邮件, 周报, 写作, 改稿, 说明, 提案, 公告, "readme", "documentation", "proposal", "changelog", "user guide", "write-up", "write a proposal", "proposal for"]
 synonyms: [邮件, 文案, 汇报, 总结, 需求, 说明, 改写, 精简, 纪要, 提案]
 kind: worker
 handoff: [frontend, backend]
