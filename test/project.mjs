@@ -467,6 +467,48 @@ async function step(handler, agentId, messages) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
+// 场景十二：派单书已经不选人了，别再选一次。
+// 真实缺口账本里 5 条 `multi` 全是派单书。它们提到前端、测试、审查，按词面算跨领域没错；
+// 按语义算错——选人这一步已经做完了。注入「按主领域开工，交付时把副的一起交」的结果是
+// 后端工程师被要求顺手把前端也做了，而前端有它自己的会话和任务卡。
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-dispatch-"));
+  fs.writeFileSync(path.join(dir, "REQUIREMENTS.md"), "# 需求\n");
+  fs.writeFileSync(path.join(dir, "TASKS.md"), "# 卡\n");
+  const { ctx, handlers, tools } = createFakeContext();
+  plugin.apply(ctx, {});
+  const sess = "sess-12";
+  await tools[0].execute({ name: "intake", project: dir, approved: true, phase: "build" }, { agent: { id: sess } });
+  const handler = handlers.get("agent/pre-step");
+  let seq = 0;
+  const run = async (text) => {
+    seq += 1;
+    const decision = await step(handler, sess, [userMessage(`p12-${seq}`, text)]);
+    return decision.messages.filter((m) => m.source?.kind?.startsWith("capability-router"));
+  };
+
+  // 这句是从真实 gaps.jsonl 里抄的：它同时提到前端、接口——按词面判 multi 说得通。
+  const dispatch = await run(
+    "你现在的身份是**后端工程师**（用 `expert(\"backend\")` 取完整工作方式后照它做事）。" +
+      "项目目录：`C:/work/proj`。任务：把接口补上，前端那边要对接。",
+  );
+  // 这一轮状态卡会占位（它优先于 hint），所以要断言的是「没有路由提示」，
+  // 而不是「正好有一条 hint」——那样测的是状态卡的节流节奏，不是这次的修复。
+  assert.ok(
+    !dispatch.some((m) => ["capability-router-gap", "capability-router-secondary"].includes(m.source.kind)),
+    `派单书已经被点了人，不该再收到跨领域提示，实际：${dispatch.map((m) => m.source.kind).join(",")}`,
+  );
+
+  // 对照：同样跨领域但没点名 → 主次提示照旧（这条不能被顺手一起关掉）。
+  const unstamped = await run("登录页的样式在窄屏下全乱了，顺便把接口也改一下");
+  assert.ok(
+    unstamped.some((m) => ["capability-router-gap", "capability-router-secondary"].includes(m.source.kind)),
+    `没说身份的跨领域句仍要给主次提示，实际：${unstamped.map((m) => m.source.kind).join(",")}`,
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 fs.rmSync(HOME, { recursive: true, force: true });
 
 console.log("场景一 目录压制角色    ✓");
@@ -480,4 +522,5 @@ console.log("场景八 长任务不早退    ✓");
 console.log("场景九 长任务补状态卡  ✓");
 console.log("场景十 水平与确认落盘  ✓");
 console.log("场景十一 提问独占总线  ✓");
+console.log("场景十二 派单书不选人  ✓");
 console.log("项目模式测试通过");

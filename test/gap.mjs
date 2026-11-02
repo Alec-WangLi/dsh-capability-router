@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { gapText, looksLikeQuestion, looksLikeTask, secondaryText } from "../lib/gap.js";
+import { explicitExpert, gapText, looksLikeQuestion, looksLikeTask, secondaryText } from "../lib/gap.js";
 
 const catalog = {
   experts: [
@@ -226,6 +226,48 @@ console.log("场景六 分不清        ✓");
 console.log("场景七 候选不足      ✓");
 console.log("场景八 空目录        ✓");
 console.log("场景九 跨领域        ✓");
+// 场景十七：派单书自己点了人，就别再选一次。
+// 真实缺口账本里 5 条 `multi` 全是派单书——它们提到前端、测试、审查，按词面算跨领域没错，
+// 按语义算错：选人这一步已经做完了。注入「按主领域开工、副的一起交」等于让后端顺手把前端也做了。
+{
+  const fake = [
+    { id: "backend", name: "后端工程师", kind: "worker", triggers: [], synonyms: [] },
+    { id: "review", name: "审查专家", kind: "reviewer", triggers: [], synonyms: [] },
+    { id: "frontend", name: "前端工程师", kind: "worker", triggers: [], synonyms: [] },
+  ];
+
+  // `expert("…")` 是最常见的样子
+  assert.equal(
+    explicitExpert('你现在的身份是**后端工程师**（用 `expert("backend")` 取完整工作方式）', fake)?.id,
+    "backend",
+  );
+  // 中文身份声明，且带 markdown 加粗——不去标记就一条都认不出来
+  assert.equal(explicitExpert("身份：**审查专家**。项目目录 x", fake)?.id, "review");
+  assert.equal(explicitExpert("你是后端工程师，把接口补上", fake)?.id, "backend");
+  // 反例：只是提到这个领域，没有点名让谁干
+  assert.equal(explicitExpert("帮我把接口补上，前端也要改", fake), undefined);
+  assert.equal(explicitExpert("作为一个审查专家，我觉得还行", fake), undefined);
+  assert.equal(explicitExpert("", fake), undefined);
+  // 点到不在目录里的 id：不算派单
+  assert.equal(explicitExpert('用 `expert("nobody")` 取', fake), undefined);
+
+  // 上限：账本里记 explicit 不是命中，但也不能落进缺口提示
+  assert.equal(
+    gapText({ kind: "explicit", expert: fake[0], candidates: [] }, { experts: fake }, "身份：后端工程师"),
+    undefined,
+  );
+  // 对照：没有身份声明时，跨领域提示照旧
+  assert.match(
+    gapText(
+      { kind: "multi", candidates: [{ expert: fake[2], score: 3 }, { expert: fake[0], score: 2 }] },
+      { experts: fake },
+      "登录页样式乱了，顺便把接口也改一下",
+    ),
+    /跨领域/,
+  );
+}
+
+console.log("场景十七 派单书不再选人 ✓");
 console.log("场景十六 提问与派活   ✓");
 console.log("场景十二 项目模式文案 ✓");
 console.log("场景十三 idle 逐字相同 ✓");

@@ -256,14 +256,20 @@ expert(name, { project, phase, level, approved, reopen }):   // ④ 状态的唯
 保留 `lib/router.js`，但结论从「裁决」变成「提示」：
 
 ```text
-hit(multi) → 目录区末尾加一句：这句话涉及 backend、frontend
+hit        → 注入该专家 role（项目模式下改为状态卡）
+secondary  → 加一句：主 A，副 B、C，按主领域开工
+multi      → 加一句：这句话涉及 backend、frontend
 ambiguous  → 加一句：可能是 A 或 B
 miss       → 加一句：没有对口专家（并记账）
+
+explicit   → 什么都不加（v0.20.17）
 ```
 
 新增 `multi` 结论：最高分 ≥ 1.0 且第二名 ≥ 1.0 且分差 < 0.35 时，报多个而不是 ambiguous。v1 把「跨领域项目」误判成「分不清」，是它最明显的错。
 
 匹配器的价值从「选人」变成「提醒模型这活有多宽」。
+
+`explicit` 是 v0.20.17 加的第五种结论：**这句话自己点了人**（`expert("backend")` 或「身份：后端工程师」）。它连「提醒有多宽」都不该说——派单书提到前端是因为前端有它自己的会话，不是要这个会话顺手做掉。见 `lib/gap.js` 的 `explicitExpert()`。
 
 ---
 
