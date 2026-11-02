@@ -1,7 +1,7 @@
 name: 调研专家
 description: 查市面上有没有现成方案，避免重复造轮子
 kind: scout
-triggers: [调研, 竞品, 现成的, 同类产品, 开源方案, 技术选型, 选型, 市面上, 有没有人做过, 轮子, 先例]
+triggers: [调研, 竞品, 现成的, 同类产品, 开源方案, 技术选型, 选型, 市面上, 有没有人做过, 轮子, 先例, "prior art", "existing library", "is there a", "compare options", "survey"]
 synonyms: [参考, 对比, 别人怎么做的, 方案调研]
 handoff: [intake, backend, frontend]
 deliverables: [PRIOR-ART.md]

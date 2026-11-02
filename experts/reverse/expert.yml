@@ -1,8 +1,8 @@
 name: 逆向与安全工程师
 description: 脱壳、破解校验、协议还原、样本分析、hook
 kind: worker
-triggers: [逆向, 脱壳, 反编译, 破解, 注册码, 激活, 抓包, 协议分析, 混淆, 加固, hook, 样本分析, 恶意样本, 病毒样本, 校验和, 内存篡改]
-synonyms: [patch, 注入, so, dll, 去广告, 绕过, 算法还原, 内存, 抓个包]
+triggers: [逆向, 脱壳, 反编译, 破解, 注册码, 激活, 抓包, 协议分析, 混淆, 加固, hook, 样本分析, 恶意样本, 病毒样本, 校验和, 内存篡改, "decompile", "unpack", "keygen", "license check", "reverse engineer", "frida", "packed binary"]
+synonyms: [patch, 注入, ".so", so文件, dll, 去广告, 绕过, 算法还原, 内存, 抓个包]
 handoff: [backend, qa, review]
 deliverables: [分析结论, 复现步骤或补丁]
 skills: []

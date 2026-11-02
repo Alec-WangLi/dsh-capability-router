@@ -1,6 +1,6 @@
 name: 数据与办公
 description: 表格、报表、演示文稿、PDF 与数据整理
-triggers: [表格, Excel, CSV, 数据, 统计, 报表, PPT, 幻灯片, PDF, 图表, 汇总, 清洗, 透视, 格式转换]
+triggers: [表格, Excel, CSV, 数据, 统计, 报表, PPT, 幻灯片, PDF, 图表, 汇总, 清洗, 透视, 格式转换, "spreadsheet", "csv", "xlsx", "pivot table", "dashboard", "dataset", "chart"]
 synonyms: [表, 表格, 报告, 报表, 汇总, 明细, 清洗, 透视, 图表, 报价单, 发票]
 kind: worker
 handoff: [docs, review]

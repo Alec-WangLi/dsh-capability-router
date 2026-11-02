@@ -386,3 +386,4 @@ client 半边只有一层壳：tab 导航 + iframe(src = panel 地址)
 5. ~~client 半边的 React 从哪来~~ 已确认：bundle 的 `factory(require)` 里 `require("react")` 由宿主加载器提供，不需要打包、不需要构建步骤。
 6. ~~client 清单字段~~ 已确认：`@deepseek-ai/dsh-client-modules/lib/index.js:62-76` 只读 `pkg.dsh.client`（`platform`/`inject`/`external`/`immediately`），`dshClient` 是 runner 注释里的旧说法。
 7. ~~远程访问下的 iframe 地址~~ 已用同源相对路径解决：面板挂在宿主 Web 服务上（`ctx.inject(["webServer"], sub => sub.webServer.register({kind:"exact", path, handler}))`），iframe 用 `/capability-router/panel`，远程访问天然正确。
+| `lib/i18n.js` | 语言判定（`detectLang`）与英文词表（`PHASE_LABEL_EN` / `LEVEL_LABEL_EN` / `KIND_LABEL_EN`）；只服务动态层 |

@@ -1,6 +1,6 @@
 name: 排障工程师
 description: 报错、崩溃、不生效、性能问题
-triggers: [报错, 崩溃, 失败, 不生效, 异常, bug, 排查, 定位, 复现, 性能, 卡顿, 内存, 泄漏, 慢, 挂掉, 白屏]
+triggers: [报错, 崩溃, 失败, 不生效, 异常, bug, 排查, 定位, 复现, 性能, 卡顿, 内存, 泄漏, 慢, 挂掉, 白屏, "stack trace", "traceback", "not working", "why is", "crash", "exception", "reproduce"]
 synonyms: [崩, 卡, 慢, 白屏, 打不开, 报错, 日志, 复现, 事故, 内存, 泄漏, 偶发, 定位, 没生效, 没起作用, 不起作用, 没反应, 不管用, 失效]
 kind: worker
 handoff: [backend, docs]

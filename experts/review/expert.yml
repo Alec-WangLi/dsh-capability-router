@@ -1,7 +1,7 @@
 name: 审查专家
 description: 按同一份验收标准逐条核对，能过才放行
 kind: reviewer
-triggers: [审查, 验收, 复核, 复查, 检查一下, 有没有问题, 代码审查, 收口, 把关, 审一下, 审一遍, 评审]
+triggers: [审查, 验收, 复核, 复查, 检查一下, 有没有问题, 代码审查, 收口, 把关, 审一下, 审一遍, 评审, "code review", "review the", "audit", "check the diff", "acceptance"]
 synonyms: [过一遍, 挑毛病, 质检, 合不合规, 能不能交]
 handoff: [debug, docs, backend, frontend]
 deliverables: [审查结论]
