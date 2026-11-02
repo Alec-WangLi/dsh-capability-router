@@ -131,7 +131,7 @@ lib/doctor.js     技能供给检查（纯计算，不碰文件系统）
 lib/yaml.js       YAML 子集解析器（为了零依赖手写的）
 experts/<id>/     专家包：expert.yml + role.md，10 个（含接单 intake【入口】、审查 review【收口】、调研 research【调研】）
 client/index.js   浏览器半边：插件详情页与会话页各挂一个 iframe，无构建步骤
-test/             十八套 141 个场景
+test/             二十套 152 个场景
 tools/            match（验收）· doctor（体检）· panel（只读面板）· forge（造专家）· gaps（汇总）· dump-session（会话日志）
 docs/             功能说明 · 架构 · 验收实录 · 安装与排障
 DESIGN.md         设计取舍、宿主 API 实测、踩过的坑
@@ -154,6 +154,7 @@ node tools/dump-session.mjs ~/.dsh/sessions/<slug>/session-<id> --stats
 | [docs/FEATURES.md](./docs/FEATURES.md) | 每个能力的行为、判据、消息形状、数据文件、测试矩阵、限制 |
 | [docs/INSTALL.md](./docs/INSTALL.md) | 安装、挂载链路、验证、诊断、卸载、热重载的坑 |
 | [DESIGN.md](./DESIGN.md) | 为什么这么设计、宿主 API 实测记录、v0.2.0 的 A/B 对照 |
+| [AGENTS.md](./AGENTS.md) | **给接手的 agent 看**：每轮怎么干、四路生效核对、变异验证、环境坑、刻意的代价（L4/L8/L11） |
 
 ---
 
