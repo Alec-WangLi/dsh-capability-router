@@ -192,6 +192,25 @@ const catalog = {
   ];
   for (const text of commands) assert.equal(looksLikeQuestion(text), false, `不该判定为提问：${text}`);
 
+  // 委婉请求：句式是疑问，要的是改动。差别在「有没有一个要变的量」——
+  // 处置式（把…改/换/删）、改变动作（做成/调成/变）、程度补语（一点/大点/淡点）。
+  // 这几句第一版全被判成提问，注入会劝它「别改代码」，该干的活就停在那儿了。
+  const polite = [
+    "能不能把这个按钮改大一点",
+    "这个可以做成深色主题吗？",
+    "界面配色能不能再淡一点",
+    "能不能把日志级别调成 debug",
+  ];
+  for (const text of polite) assert.equal(looksLikeQuestion(text), false, `委婉请求不是提问：${text}`);
+
+  // 同样挂着「能不能 / 吗」，问的是能力与支持，那是真提问——不能靠疑问词一刀切。
+  const askAbility = [
+    "能不能离线用？",
+    "这个功能支持多语言吗？",
+    "这套流程谁来管？",
+  ];
+  for (const text of askAbility.slice(0, 2)) assert.equal(looksLikeQuestion(text), true, `问能力仍是提问：${text}`);
+
   // 有问号没疑问词也是提问；没有问号也没有疑问词，一律当活。
   assert.equal(looksLikeQuestion("这个报错什么意思？"), true);
   assert.equal(looksLikeQuestion("今天中午吃什么"), false);
