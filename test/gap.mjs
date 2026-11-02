@@ -308,4 +308,23 @@ console.log("场景十二 项目模式文案 ✓");
 console.log("场景十三 idle 逐字相同 ✓");
 console.log("场景十四 闲聊两套判据  ✓");
 console.log("场景十五 跨领域不受影响 ✓");
+// 场景十八（v0.20.20）：英文句子也算活
+//
+// 词表全是中文，`add a delete button to the list` 被判成「不像一件活」，
+// 项目模式下就会拿到「这是对上一个问题的回答」——把活说成不是活。
+// 中文会话里混一句英文很常见（贴 issue、贴日志里的需求）。
+{
+  const withIntake = { experts: [{ id: "intake", name: "接单专家", kind: "intake" }] };
+
+  assert.equal(looksLikeTask("add a delete button to the list"), true, "英文命令要算活");
+  assert.equal(looksLikeTask("Fix the login bug"), true, "大小写不该影响判断");
+  assert.equal(looksLikeTask("prefix the string"), true, "前缀类的也是活（`fix ` 命中，无害）");
+
+  // 躲开词中命中：`latest` 里有 `test`，`prefix` 里有 `fix`——带尾空格是为了这个。
+  // 这条钉住的是「别为了多收几个词把名词也收进来」。
+  assert.equal(looksLikeTask("this is the latest version"), false, "名词不该被当成活");
+  assert.equal(looksLikeTask("可以按你推荐。"), false, "中文决策回复仍不算活");
+}
+
+console.log("场景十八 英文也算活     ✓");
 console.log("缺口提示测试通过");
