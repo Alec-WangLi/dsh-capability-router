@@ -1011,6 +1011,8 @@ window.__ModuleLoader__.load({
 
 **判据不分语言**：`looksLikeTask`、`looksLikeQuestion`、专家的打分全是语言无关的。「这句话要不要开口」和「这句话该归谁」不看语言，只有「开口时说什么话」看。所以同一件事用中文说还是英文说，**开不开口必须一样**——这一条有断言（`test/i18n.mjs` 场景三）。
 
+**账本也要记语言**：`gaps.jsonl` 的每一行在非中文时多一个 `lang` 字段（中文是基线，旧行没这个键就按中文读）。`npm run gaps` 聚合时把它显示在阶段后面（`·  EN`）。没有这个字段，「英文语料落空率」这个问题没法回答——而它是补不补英文词表的唯一依据。
+
 **专家词表也要能认英文句子**：十位专家的 `triggers` 补了英文短语（`api endpoint`、`stack trace`、`license check`、`pivot table`…），全部用多词短语或长词，避开两三个字母的短词。踩过的坑：逆向的同义词里原本有 `so`（指 `.so` 库文件），英文里 `slow`、`also`、`so that` 全命中，`why is this page so slow?` 被判成逆向。现在收成 `.so` 和 `so文件`。
 
 **两处按字符数放宽的预算**（英文同义信息约是中文的 2.3 倍，`待确认` 3 字 vs `unconfirmed` 11 字母）：

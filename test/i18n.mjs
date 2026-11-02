@@ -276,4 +276,5 @@ for (const phase of ["idle", "spec", "build", "review", "deliver"]) {
   assert.equal(looksLikeQuestion("能不能把这个按钮改大一点"), false, "委婉请求是活，不是提问");
 }
 
+
 console.log("i18n: 11 场景 ok");

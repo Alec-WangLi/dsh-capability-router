@@ -44,17 +44,20 @@ for (const row of scope) {
   const key = `${row.kind}\u0000${(row.text ?? "").trim()}`;
   const entry =
     groups.get(key) ??
-    { kind: row.kind, text: row.text, count: 0, last: row.at, candidates: row.candidates ?? [], phases: new Set() };
+    { kind: row.kind, text: row.text, count: 0, last: row.at, candidates: row.candidates ?? [], phases: new Set(), langs: new Set() };
   entry.count += 1;
   // 同一句话在 idle 里落空和在大任务里落空是两种信号：聚合仍按原话，
   // 但把这句话在哪些阶段落空过带上，不然新写的 phase 字段没人看等于没写。
   if (typeof row.phase === "string" && row.phase !== "") entry.phases.add(row.phase);
+  // 非中文才记（中文是基线，旧行没这个键）。没有它就没法回答
+  // 「英文语料落空率是多少」——而那是补不补英文词表的唯一依据。
+  if (typeof row.lang === "string" && row.lang !== "" && row.lang !== "zh") entry.langs.add(row.lang);
   if (row.at > entry.last) entry.last = row.at;
   groups.set(key, entry);
 }
 
 const sorted = [...groups.values()]
-  .map((entry) => ({ ...entry, phases: [...entry.phases] }))
+  .map((entry) => ({ ...entry, phases: [...entry.phases], langs: [...entry.langs] }))
   .sort((left, right) => right.count - left.count || String(right.last).localeCompare(String(left.last)));
 
 if (asJson) {
@@ -72,7 +75,8 @@ console.log("");
 for (const entry of sorted.slice(0, 20)) {
   const tag = entry.kind === "ambiguous" ? `分不清/${entry.candidates.join("|")}` : "没人接";
   const where = entry.phases.length === 0 ? "" : `  ·  阶段 ${entry.phases.join("/")}`;
+  const which = entry.langs.length === 0 ? "" : `  ·  ${entry.langs.map((code) => code.toUpperCase()).join("/")}`;
   console.log(`×${String(entry.count).padStart(2)}  ${entry.text}`);
-  console.log(`      ${tag}${where}  ·  最近 ${entry.last}`);
+  console.log(`      ${tag}${where}${which}  ·  最近 ${entry.last}`);
 }
 if (sorted.length > 20) console.log(`\n还有 ${sorted.length - 20} 种没显示，用 --all 或 --json 看全量。`);
