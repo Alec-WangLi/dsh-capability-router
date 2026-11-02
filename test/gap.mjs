@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { gapText, looksLikeTask, secondaryText } from "../lib/gap.js";
+import { gapText, looksLikeQuestion, looksLikeTask, secondaryText } from "../lib/gap.js";
 
 const catalog = {
   experts: [
@@ -173,6 +173,31 @@ const catalog = {
   assert.equal(gapText(ambiguous, withIntake, text, { phase: "spec", phaseLabel: "需求确认" }), gapText(ambiguous, withIntake, text), "ambiguous 不该被阶段改写");
 }
 
+// 场景十六：提问与派活是两个问题。
+// 「这个按钮为什么没反应」里有「为什么」，`looksLikeTask` 判它是活（对缺口提示是对的：
+// 「怎么实现 X」确实要人干）；但要的是答案还是改动，这句是前者。
+{
+  const asks = [
+    "这个按钮点下去为什么没反应？",
+    "你觉得现在的方案还有什么风险？",
+    "这样改会不会影响旧数据？",
+  ];
+  for (const text of asks) assert.equal(looksLikeQuestion(text), true, `应判定为提问：${text}`);
+
+  const commands = [
+    "帮我加一个导出 CSV 的按钮",
+    "这个参数校验写错了，帮我改成 1",
+    "导出为什么失败？帮我修一下",
+    "这个页面加载太慢了，优化一下",
+  ];
+  for (const text of commands) assert.equal(looksLikeQuestion(text), false, `不该判定为提问：${text}`);
+
+  // 有问号没疑问词也是提问；没有问号也没有疑问词，一律当活。
+  assert.equal(looksLikeQuestion("这个报错什么意思？"), true);
+  assert.equal(looksLikeQuestion("今天中午吃什么"), false);
+  assert.equal(looksLikeQuestion(""), false);
+}
+
 console.log("场景一 任务判定      ✓");
 console.log("场景二 闲聊不打扰    ✓");
 console.log("场景三 命中不说话    ✓");
@@ -182,6 +207,7 @@ console.log("场景六 分不清        ✓");
 console.log("场景七 候选不足      ✓");
 console.log("场景八 空目录        ✓");
 console.log("场景九 跨领域        ✓");
+console.log("场景十六 提问与派活   ✓");
 console.log("场景十二 项目模式文案 ✓");
 console.log("场景十三 idle 逐字相同 ✓");
 console.log("场景十四 闲聊仍静默  ✓");

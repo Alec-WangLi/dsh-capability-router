@@ -245,7 +245,7 @@ async function step(handler, agentId, messages) {
 // 前面 state-level.mjs 测的是纯函数，这里走真实 lib/index.js 的 onOpen 链路：
 // 参数 → setLevel/setApproved → advancePhase → gateNote → 写盘，中间任何一环漏了这里都会红。
 {
-  const { ctx, tools } = createFakeContext();
+  const { ctx, tools, handlers } = createFakeContext();
   plugin.apply(ctx, {});
   const tool = tools.find((definition) => definition.name === "expert");
   const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-level-"));
@@ -346,6 +346,20 @@ async function step(handler, agentId, messages) {
   assert.match(afterShip.note ?? "", /已经交付/, "交付后开领域专家要说清这是修补还是新需求");
   const recheck = await tool.execute({ name: "review", project: deliverDir }, { agent: { id: "sess-10k" } });
   assert.match(recheck.note ?? "", /核的是哪一版/, "交付后复核要先分清核的是哪一版");
+
+  // 项目模式下检查点整体让位给状态卡，但「这句是提问」不能跟着让位。
+  // 实测：提问（为什么没反应）/ 命令（加个按钮）/ 征询（有什么风险）拿到的注入一字不差，
+  // 全是「下一步：按任务卡推进」——模型看见这句就会把提问也当成开工信号。
+  {
+    const askHandler = handlers.get("agent/pre-step");
+    const ask = async (text, id) => {
+      const messages = [{ role: "user", id, content: [{ type: "text", text }], source: { kind: "user" } }];
+      const d = await askHandler({ agent: { id: "sess-10i" }, messages }, async () => ({ kind: "continue", messages }));
+      return d.messages.find((m) => m.source?.kind === "capability-router-hint");
+    };
+    assert.match((await ask("这个按钮点下去为什么没反应？", "prompt-ask-1"))?.content[0].text ?? "", /这句是提问/, "项目模式下提问要有一句提醒");
+    assert.equal(await ask("帮我加一个导出 CSV 的按钮", "prompt-ask-2"), undefined, "任务句仍然只有状态卡，别撕注意力");
+  }
 
   // 状态说「按任务卡推进」，而项目目录里可能一份都没有。状态是插件记的、文档是模型写的，
   // 两边谁都不管谁；expert() 是唯一同时握着项目路径和新旧阶段的地方，对账只能放这。
