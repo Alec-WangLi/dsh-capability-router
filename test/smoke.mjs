@@ -239,6 +239,9 @@ assert.equal(againGap.messages.length, 2, "同一条消息只提示一次");
   const intakeMsg = intakeDecision.messages[1];
   assert.equal(intakeMsg.source.kind, "capability-router-intake");
   assert.ok(intakeMsg.content[0].text.includes("接单不是终点"));
+  // 但「接单不是终点」这句话本身假定它已经接过单。首句「我想做一款记账软件」时
+  // 项目还停在 idle，直接讲分派等于跳步——模型会以为需求已经收敛完了。
+  assert.ok(intakeMsg.content[0].text.includes("还没接单"), "没接过单要先说接单，别跳过它直接讲分派");
   const intakeAgain = await gapHandler({ messages: intakeDecision.messages }, async () => ({ kind: "continue", messages: intakeDecision.messages }));
   assert.equal(intakeAgain.messages.length, 2, "同一条消息不重复补");
 }
