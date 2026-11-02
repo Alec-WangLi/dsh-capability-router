@@ -423,6 +423,50 @@ async function step(handler, agentId, messages) {
   fs.rmSync(path.resolve(relDir), { recursive: true, force: true });
 }
 
+// 场景十一：提问轮只说一句话，而且别让别的话说反话。
+// 以前一条「这个页面为什么这么慢，接口是不是也有问题」会收到三条：状态卡（按任务卡推进）、
+// 主次（按主领域开工）、提问（别顺手改代码）——后一条让前两条作废，可模型看到的是三段并列的话。
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-ask-"));
+  fs.writeFileSync(path.join(dir, "REQUIREMENTS.md"), "# 需求\n");
+  fs.writeFileSync(path.join(dir, "TASKS.md"), "# 卡\n");
+  const { ctx, handlers, tools } = createFakeContext();
+  plugin.apply(ctx, {});
+  const sess = "sess-11";
+  await tools[0].execute({ name: "intake", project: dir, approved: true, phase: "build" }, { agent: { id: sess } });
+  const handler = handlers.get("agent/pre-step");
+  let seq = 0;
+  const run = async (text) => {
+    seq += 1;
+    const decision = await step(handler, sess, [userMessage(`p11-${seq}`, text)]);
+    return decision.messages.filter((m) => m.source?.kind?.startsWith("capability-router"));
+  };
+
+  const mixed = await run("这个页面为什么这么慢，接口是不是也有问题");
+  assert.deepEqual(
+    mixed.map((m) => m.source.kind),
+    ["capability-router-hint"],
+    `提问轮只该出一条，实际：${mixed.map((m) => m.source.kind).join(",")}`,
+  );
+  assert.match(mixed[0].content[0].text, /这句是提问/);
+
+  const missed = await run("这个功能支持多语言吗？");
+  assert.deepEqual(
+    missed.map((m) => m.source.kind),
+    ["capability-router-hint"],
+    `落空的提问也只该出一条，实际：${missed.map((m) => m.source.kind).join(",")}`,
+  );
+
+  // 让位一轮，不是取消：提问不吃状态卡的额度，下一句不是提问时它照常出现。
+  const work = await run("帮我把导出按钮加上");
+  assert.ok(
+    work.some((m) => m.source.kind === "capability-router-state"),
+    "提问让位之后，状态卡要在下一句回来",
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 fs.rmSync(HOME, { recursive: true, force: true });
 
 console.log("场景一 目录压制角色    ✓");
@@ -435,4 +479,5 @@ console.log("场景七 项目级阶段      ✓");
 console.log("场景八 长任务不早退    ✓");
 console.log("场景九 长任务补状态卡  ✓");
 console.log("场景十 水平与确认落盘  ✓");
+console.log("场景十一 提问独占总线  ✓");
 console.log("项目模式测试通过");
