@@ -283,4 +283,41 @@ console.log("场景六 按会话过滤      ✓");
 console.log("场景七 方案与水平行    ✓");
 console.log("场景八 按句折叠        ✓");
 console.log("场景九 项目状态覆盖镜像 ✓");
+
+// 场景十（v0.21.6）：面板跟人走，不跟数据走。同一份快照，语言由 ?lang= 决定。
+// 为什么要有这一条：v0.21.0 把动态注入全翻了，面板一个字没动——
+// 英文用户打开面板看到的还是中文，等于英文适配在最后一步断掉。
+{
+  const data = {
+    sessions: [
+      {
+        sessionId: "abc12345-0000-0000-0000-000000000000",
+        phase: "build",
+        approved: false,
+        level: "pro",
+        experts: ["intake", "backend"],
+        since: "2026-11-02T10:00:00Z",
+        project: "C:/p",
+      },
+    ],
+    runs: [],
+    gaps: [],
+    generatedAt: "2026-11-02 14:40",
+  };
+  const han = /[\u4e00-\u9fff]/;
+  const text = (html) => html.replace(/<style>[\s\S]*?<\/style>/, "").replace(/<[^>]+>/g, " ");
+
+  const zh = renderHtml(data);
+  const en = renderHtml(data, "en");
+
+  assert.ok(han.test(text(zh)), "默认是中文");
+  assert.ok(!han.test(text(en)), "英文面板正文不能有汉字");
+  assert.ok(en.includes('lang="en"'), "文档语言要跟着变");
+  assert.ok(en.includes("?lang=zh"), "英文页要给一个切回中文的入口");
+  assert.ok(zh.includes("?lang=en"), "中文页要给一个切到英文的入口");
+  assert.ok(/build/.test(en) && en.includes("experienced"), "阶段名与水平名走英文表");
+  assert.ok(en.includes("unconfirmed"), "方案状态也要翻");
+}
+console.log("场景十 面板双语          ✓");
+
 console.log("面板数据层测试通过");

@@ -79,7 +79,9 @@ const server = http.createServer((request, response) => {
     }
     if (url.pathname === "/" || url.pathname === "/index.html") {
       response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-      response.end(renderHtml(current(request)));
+      // 语言从 query 来：`?lang=en`。面板是给人看的，同一份快照两种语言都能渲染。
+      const lang = /[?&]lang=en/i.test(String(request.url ?? "")) ? "en" : "zh";
+      response.end(renderHtml(current(request), lang));
       return;
     }
     response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
