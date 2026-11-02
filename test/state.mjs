@@ -23,7 +23,8 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-state-"));
 {
   const file = stateFile(tmp, "s1");
   const written = writeState(file, { sessionId: "s1", phase: "spec", experts: ["intake"] });
-  assert.equal(written.phase, "spec");
+  assert.equal(written.error, undefined, "正常路径不该报写盘失败");
+  assert.equal(written.state.phase, "spec");
   assert.equal(readState(file).experts[0], "intake");
   assert.ok(fs.existsSync(file), "应该真的落盘了");
 

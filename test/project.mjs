@@ -346,6 +346,23 @@ async function step(handler, agentId, messages) {
   assert.match(afterShip.note ?? "", /已经交付/, "交付后开领域专家要说清这是修补还是新需求");
   const recheck = await tool.execute({ name: "review", project: deliverDir }, { agent: { id: "sess-10k" } });
   assert.match(recheck.note ?? "", /核的是哪一版/, "交付后复核要先分清核的是哪一版");
+
+  // 写盘失败要说话。以前 writeState 静默吞错，project 指到一个文件上时状态每轮都丢、
+  // 每轮都从头开始，而模型看到的 found:true 一切正常——静默失败比不记更贵。
+  const notADir = path.join(os.tmpdir(), `caprouter-notadir-${process.pid}.txt`);
+  fs.writeFileSync(notADir, "x");
+  const broken = await tool.execute({ name: "intake", project: notADir }, { agent: { id: "sess-10m" } });
+  assert.equal(broken.found, true, "状态写不进去，专家本体还是要返回——role 照样有用");
+  assert.match(broken.note ?? "", /状态没能落盘/, "写不进去必须说一句，否则模型以为记下了");
+
+  // 相对路径：宿主 cwd 与会话工作目录不是一回事，至少要回显它记到了哪。
+  const relDir = `./.scratch-rel-${process.pid}`;
+  const rel = await tool.execute({ name: "intake", project: relDir }, { agent: { id: "sess-10n" } });
+  assert.match(rel.note ?? "", /相对路径/, "传了相对路径要提醒一句");
+  assert.ok((rel.note ?? "").includes(path.resolve(relDir)), "要回显解析后的绝对路径");
+  const relState = JSON.parse(fs.readFileSync(path.join(path.resolve(relDir), ".capability-router", "state.json"), "utf8"));
+  assert.equal(path.isAbsolute(relState.project), true, "状态里存的必须是绝对路径，换个 cwd 也能找回来");
+  fs.rmSync(path.resolve(relDir), { recursive: true, force: true });
 }
 
 fs.rmSync(HOME, { recursive: true, force: true });

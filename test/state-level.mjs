@@ -285,8 +285,8 @@ check("场景十一 落盘往返保留新字段", () => {
     level: "pro",
     approved: true,
   });
-  assert.equal(written.level, "pro", "writeState 的返回值要带 level");
-  assert.equal(written.approved, true);
+  assert.equal(written.state.level, "pro", "writeState 的返回值要带 level");
+  assert.equal(written.state.approved, true);
 
   const back = stateApi.readState(file);
   assert.equal(back.level, "pro", "读回来 level 还在");
