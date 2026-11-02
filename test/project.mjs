@@ -339,6 +339,13 @@ async function step(handler, agentId, messages) {
   assert.ok(phaseEnum.includes("spec") && phaseEnum.includes("build") && phaseEnum.includes("review"), "原有三个阶段不许丢");
   const stateApi = await import("../lib/state.js");
   assert.match(stateApi.nextStep({ phase: "deliver" }), /交付核对/, "deliver 的下一步要指向交付核对");
+
+  // deliver 是终点：进得去、出不来。所以「已交付的项目接着改 / 接着核」这两条路必须说话，
+  // 否则模型只能自己猜那是修补还是新一轮——猜错就是改动落在没人验收的地方。
+  const afterShip = await tool.execute({ name: "backend", project: deliverDir }, { agent: { id: "sess-10k" } });
+  assert.match(afterShip.note ?? "", /已经交付/, "交付后开领域专家要说清这是修补还是新需求");
+  const recheck = await tool.execute({ name: "review", project: deliverDir }, { agent: { id: "sess-10k" } });
+  assert.match(recheck.note ?? "", /核的是哪一版/, "交付后复核要先分清核的是哪一版");
 }
 
 fs.rmSync(HOME, { recursive: true, force: true });
