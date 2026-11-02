@@ -943,3 +943,17 @@ const explicitProject = typeof args?.project === "string" && path.isAbsolute(arg
 规矩：参数校验可以拒绝，可以解释，不能**替换成别的行为还不吭声**。要丢掉一个参数，就把「我没用它，因为我按 X 处理了」说出口；要吞一个异常，就把原因传回给能说话的那一层。
 
 顺带一条：`writeState()` 的返回值从 `state` 改成 `{ state, error }`。**让函数能表示「我失败了」**，比在每个调用点外面套 `try/catch` 便宜得多——调用点根本不知道里面会怎么失败。
+
+#### 2026-11-02 追加（v0.20.6）：镜像不是事实源
+
+面板会话卡读的是 `sessions/*.json` 里的 `phase`。那是**镜像**——`expert()` 每次写项目文件后顺手给会话文件留一份，方便 pre-step 在项目文件被删时还能知道「我属于哪个项目」。
+
+问题在于 pre-step 和面板的判据不同：pre-step 是项目优先（`lib/index.js:832` 的 `readState(projectStateFile(sessionState.project)) ?? sessionState`），面板直接读镜像。于是真实数据里出现：同一个项目三个会话，卡上分别写着 review / build / idle，而实际生效的一直是 review。用户打开面板，看见三个互相矛盾的「现在」。
+
+更难看的是那个 idle：它是这个项目的**创建者**（项目文件里 `sessionId` 正是它），镜像停在 idle，仍在按 review 干活。
+
+规矩：**同一份事实只留一个权威副本，其余副本必须标明自己是副本**。会话文件是副本，所以展示层要么不读它，要么读之前先问权威副本还在不在。
+
+修法是展示层加一层 `effectiveSession()`：有 `project` 就读项目文件；读不到（被删、路径失效）退回镜像，但标 `fromProject: false`——让「这份可能是旧的」变成可见信息，而不是藏在一个看起来一模一样的卡片里。
+
+一条实施细节：`readState()` 读不到时返回 `undefined` 而不是 `null`。`if (state === null)` 这种判断在 JS 里天天出事，测试第一次就是撞在 `Cannot read properties of undefined (reading 'phase')` 上——**判空要写 `!state`，别写 `=== null`**。

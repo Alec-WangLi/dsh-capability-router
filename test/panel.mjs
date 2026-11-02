@@ -211,6 +211,48 @@ fs.mkdirSync(sessionsDir, { recursive: true });
   assert.equal((wideHtml.match(/backend/g) ?? []).length, 25, "折叠后截断，表里应有 25 句而不是 1 句");
 }
 
+// 场景九（v0.20.6）：会话镜像过期时，面板要以项目状态为准
+// 同一个项目被几个会话接手时，各会话文件里的 phase 停在推它的那一刻。
+// 面板照抄镜像，用户会同时看见三个不一样的「现在」——而 pre-step 一直按项目文件判。
+{
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-panel-proj-"));
+  const project = path.join(root, "proj");
+  const projDir = path.join(project, ".capability-router");
+  fs.mkdirSync(projDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(projDir, "state.json"),
+    JSON.stringify({ sessionId: "project", phase: "review", experts: ["backend", "review"], since: "2026-11-01T00:00:00.000Z", project }, null, 2),
+    "utf8",
+  );
+  const dir2 = path.join(root, "sessions");
+  fs.mkdirSync(dir2, { recursive: true });
+  const mkSession = (id, phase) =>
+    fs.writeFileSync(
+      path.join(dir2, `${id}.json`),
+      JSON.stringify({ sessionId: id, phase, experts: ["backend"], since: "2026-11-01T00:00:00.000Z", project }),
+      "utf8",
+    );
+  mkSession("sess-stale-build", "build");
+  mkSession("sess-stale-idle", "idle");
+  fs.writeFileSync(path.join(root, "runs.jsonl"), "", "utf8");
+  fs.writeFileSync(path.join(root, "gaps.jsonl"), "", "utf8");
+
+  const snap = collect(root);
+  assert.equal(snap.sessions.length, 2);
+  for (const row of snap.sessions) {
+    assert.equal(row.phase, "review", `${row.sessionId} 的阶段要跟项目走，不是跟镜像走`);
+    assert.equal(row.fromProject, true);
+    assert.deepEqual(row.experts, ["backend", "review"], "在场专家也要以项目为准");
+  }
+
+  // 项目文件没了 → 退回镜像，并标 fromProject:false，让人知道这份可能过期
+  fs.rmSync(projDir, { recursive: true, force: true });
+  const stale = collect(root);
+  assert.equal(stale.sessions[0].fromProject, false, "项目文件没了要说清这是镜像");
+  assert.equal(stale.sessions[0].phase, "build");
+  fs.rmSync(root, { recursive: true, force: true });
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log("场景一 runs 读取      ✓");
@@ -221,4 +263,5 @@ console.log("场景五 渲染与转义      ✓");
 console.log("场景六 按会话过滤      ✓");
 console.log("场景七 方案与水平行    ✓");
 console.log("场景八 按句折叠        ✓");
+console.log("场景九 项目状态覆盖镜像 ✓");
 console.log("面板数据层测试通过");
