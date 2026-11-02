@@ -119,6 +119,52 @@ fs.mkdirSync(sessionsDir, { recursive: true });
   assert.ok(all.runs.some((row) => row.session === "other"), "不带参数时仍然看全部");
 }
 
+// 场景七（A13 渲染层 / F2）：会话卡第 3 行——「方案｜水平」，位置与文案都在。
+// 后端给的结构：.k → .v(阶段) → .meta(方案｜水平) → .meta(在场) → .meta(自 …)。
+// 这里断三件事：顺序不能变、三种取值的中文对、全角竖线（不是 `|`）。
+{
+  const html = renderHtml({
+    generatedAt: "2026-11-02T04:00:00.000Z",
+    sessions: [
+      { sessionId: "s-null", phase: "spec", experts: ["intake"], since: "2026-11-02T03:00:00.000Z", approved: false, level: null },
+      { sessionId: "s-novice", phase: "build", experts: ["intake", "backend"], since: "2026-11-02T03:10:00.000Z", approved: false, level: "novice" },
+      { sessionId: "s-pro", phase: "review", experts: ["qa"], since: "2026-11-02T03:20:00.000Z", approved: true, level: "pro" },
+    ],
+    runs: [],
+    gaps: [],
+  });
+
+  const cards = [
+    ...html.matchAll(
+      /<div class="card">\s*<div class="k">会话 [^<]*<\/div>\s*<div class="v phase-([a-z]+)">[^<]*<\/div>\s*<div class="meta">(方案：[^<]*)<\/div>\s*<div class="meta">在场：([^<]*)<\/div>/g,
+    ),
+  ];
+  assert.equal(cards.length, 3, `应渲染出 3 张完整会话卡，实际 ${cards.length}`);
+  assert.deepEqual(cards.map((card) => card[1]), ["spec", "build", "review"], "卡内顺序：阶段行在前");
+  assert.deepEqual(
+    cards.map((card) => card[2]),
+    ["方案：待确认｜水平：未判定", "方案：待确认｜水平：新手", "方案：已确认｜水平：老手"],
+    "方案与水平的中文说法、顺序、全角竖线都得对",
+  );
+  assert.deepEqual(cards.map((card) => card[3]), ["intake", "intake、backend", "qa"], "方案行必须夹在阶段与在场之间");
+
+  // approved 只认严格 true：字符串 "true" 在渲染层也不能算确认；缺字段不许抛
+  const legacySession = { sessionId: "s-legacy", phase: "idle", experts: [], since: "2026-11-01T00:00:00.000Z" };
+  let legacyHtml;
+  assert.doesNotThrow(() => {
+    legacyHtml = renderHtml({ generatedAt: "x", sessions: [legacySession], runs: [], gaps: [] });
+  }, "缺 approved / level 的老记录渲染不许抛");
+  assert.ok(legacyHtml.includes("方案：待确认｜水平：未判定"), "缺字段时给默认值，不能留空白");
+
+  const loose = renderHtml({
+    generatedAt: "x",
+    sessions: [{ ...legacySession, approved: "true", level: "expert" }],
+    runs: [],
+    gaps: [],
+  });
+  assert.ok(loose.includes("方案：待确认｜水平：未判定"), "脏数据（字符串 true / 未知水平）一律按未确认 + 未判定");
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log("场景一 runs 读取      ✓");
@@ -127,4 +173,5 @@ console.log("场景三 缺口聚合        ✓");
 console.log("场景四 collect 组装    ✓");
 console.log("场景五 渲染与转义      ✓");
 console.log("场景六 按会话过滤      ✓");
+console.log("场景七 方案与水平行    ✓");
 console.log("面板数据层测试通过");

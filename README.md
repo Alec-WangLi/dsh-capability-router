@@ -1,6 +1,6 @@
 # dsh-capability-router
 
-> 本机自研的 DSH 插件 · v0.17.2 · 零依赖
+> 本机自研的 DSH 插件 · v0.20.1 · 零依赖
 > 让 agent 先确认「这是个什么问题、手上能力够不够」，再动手。
 
 一句话：**检查点贴在用户消息后面，专家目录常驻系统提示、`expert(name)` 按需取详情，项目阶段记在项目里而不是会话里。**
@@ -24,15 +24,17 @@
 | 能力 | 开关 | 默认 | 说明 |
 |---|---|---|---|
 | 当轮检查点 | `hint` | 开 | 每条用户消息后注入一小段：提问直接答 / 新活先接单 / 修先定位 / 报告接着做 / **收口先审查** / 拿不准问一句 |
-| 专家目录 + `expert()` 工具 | `catalog` `expertTool` | 开 | 目录进系统提示（稳定前缀，入口与收口标成【入口】/【收口】），`role.md` 按需取 |
-| 专家路由 + 角色注入 | `experts` `role` | 开 | 一句话判给七个专家之一，命中就注入它的 `role.md`（`catalog` 开着时不做，选人交给模型） |
+| 专家目录 + `expert()` 工具 | `catalog` `expertTool` | 开 | 目录进系统提示（稳定前缀，入口 / 收口 / 调研标成【入口】/【收口】/【调研】），`role.md` 按需取 |
+| 专家路由 + 角色注入 | `experts` `role` | 开 | 一句话判给十个专家之一，命中就注入它的 `role.md`（`catalog` 开着时不做，选人交给模型） |
 | 缺口提示 | `gap` | 开 | 分不清说「哪两个在抢」，跨领域说「这是三个领域」，主次说「副的那半也有人管」，没人接**先说先接单**；闲聊不打扰 |
 | 缺口记账 | `gapLog` | 开 | 落空的原话记进 `gaps.jsonl`，用来决定下一个专家造什么 |
 | 长期原则段 | `intake` | 开 | 系统提示里的常驻背景，供长对话回看 |
 | 技能供给体检 | `npm run doctor` | — | 专家声明的技能装没装；`host` 源不查，缺必装退出码 1 |
 | 面板 | `web` | 开 | 宿主路由 `/capability-router/panel`；插件详情页与会话页「编排」tab 都嵌它 |
-| 项目模式 | `project` | 开 | 阶段记在项目里（`<项目>/.capability-router/state.json`），状态卡取代检查点，缺口闭嘴 |
+| 项目模式 | `project` | 开 | 阶段记在项目里（`<项目>/.capability-router/state.json`），状态卡取代检查点；缺口提示让位一步（状态卡那轮不说，下一轮补），缺口记账照常 |
 | 阶段推进 | `expert(id, {phase})` | — | 交卷时显式推进（`spec → build → review → deliver`）；只能往前走，允许跨格（多会话接手） |
+| 用户水平 | `expert(id, {level})` | — | 记下用户想听多细（`novice` 讲细节与理由 / `pro` 直接给结论）；只改状态卡与闸门文案，不改专家 `role.md` |
+| 方案确认 | `expert(id, {approved})` | — | 方案是否已被用户点头；阶段真推进时自动置真，传 `false` 可撤销。**软提示，不拦截** |
 | 运行记录 | `runs` | 开 | 每次 pre-step 一行写进 `runs.jsonl`（阶段、命中、注入了什么） |
 
 细节、判据、代价都在 **[docs/FEATURES.md](./docs/FEATURES.md)**。
@@ -56,7 +58,7 @@ DSH → 插件 → 添加插件 → 输入源码目录的绝对路径 → 重启
 ## 一屏用法
 
 ```bash
-npm test                  # 十四套 100 个场景
+npm test                  # 十八套 141 个场景
 npm run check             # 语法检查
 npm run accept            # 匹配器验收集（a 回归 + b 口语）
 node tools/match.mjs --set c   # 泛化探针
@@ -108,6 +110,8 @@ node tools/forge.mjs rtsp --name 流媒体工程师 \
 3. **注入不进会话历史**：只作用于当步上下文；事后回看会话看不到，只能查 `hints.jsonl`。
 4. **角色注入还没有 A/B**：检查点有对照数据（[DESIGN.md](./DESIGN.md) 第十节），角色注入目前只验证了「确实注入了」。
 5. **阶段要靠模型显式推进**：`spec → build` 没有可观察的事实（插件拿不到会话工作目录），模型不调 `expert(id, {phase})` 就会一直停在原阶段。
+6. **`level` 只改提示文案**：它进状态卡与闸门文案，**不改专家的 `role.md`**——角色提示词是静态文件，同一个专家对新手和老手说的是同一段话。
+7. **方案确认是软闸门**：模型一次都不调 `expert()` 时，`level` 和 `approved` 这两条链完全不生效。插件没有拦截工具调用的钩子。
 
 ---
 
@@ -125,9 +129,9 @@ lib/router.js     规则匹配器：一句话判给哪个专家
 lib/gap.js        缺口判定与文案
 lib/doctor.js     技能供给检查（纯计算，不碰文件系统）
 lib/yaml.js       YAML 子集解析器（为了零依赖手写的）
-experts/<id>/     专家包：expert.yml + role.md，首批 7 个（含接单 intake、审查 review）
+experts/<id>/     专家包：expert.yml + role.md，10 个（含接单 intake【入口】、审查 review【收口】、调研 research【调研】）
 client/index.js   浏览器半边：插件详情页与会话页各挂一个 iframe，无构建步骤
-test/             十四套 100 个场景
+test/             十八套 141 个场景
 tools/            match（验收）· doctor（体检）· panel（只读面板）· forge（造专家）· gaps（汇总）· dump-session（会话日志）
 docs/             功能说明 · 架构 · 验收实录 · 安装与排障
 DESIGN.md         设计取舍、宿主 API 实测、踩过的坑
@@ -155,7 +159,7 @@ node tools/dump-session.mjs ~/.dsh/sessions/<slug>/session-<id> --stats
 
 ## 状态
 
-v0.17.2。按里程碑看：
+v0.20.1。按里程碑看：
 
 | 版本 | 内容 |
 |---|---|
@@ -175,6 +179,8 @@ v0.17.2。按里程碑看：
 | v0.17.1–2 | 项目状态文件标注清楚；同阶段推进改为幂等（重复交卷不再报错） |
 | v0.18.0 | 按 [真实用例复盘](./docs/REAL-TEST-2026-11-02.md) 修：检查点六出口（含接单/收口）、入口专家让位、主次提示、落空先接单、`deliver` 阶段、目录五条规矩、`runs.jsonl` 加 `task`/`cands`/`secondary` |
 | v0.19.0 | 按 [对照实验](./docs/EXPERIMENT-2026-11-02.md) 修长任务：找不到人话时复用上一次的（原来第 2 步起整场静默）、状态卡按步数补（原来只说一次）、超 400 字的消息不点名、落空候选不再带 0 分项 |
+| v0.20.0 | 三位新专家（调研 `research`、逆向与安全 `reverse`、测试 `qa`，合计 10 位）；`expert()` 加 `level` 与 `approved` 两个参数并落进 `state.json`；新增 `kind: scout`（目录【调研】标签、spec 阶段不被「先别开工」拦）；状态卡多出「方案 / 用户水平 / 空闲」三态；`/api/state` 与 `readSessions()` 补齐 `approved`（布尔）与 `level`（`null` / `novice` / `pro` 三态）；接单流程改成「先问水平 → 先出 `PRIOR-ART.md` → 三句话反述确认」 |
+| v0.20.1 | 修「项目模式下缺口提示静默」（L1）：缺口块不再被 `!projectMode` 整段关掉，拆成**记账**与**注入**两个去重集合——记账一句一次（`gaps.jsonl` 每行可带 `phase`），注入一句一次且被状态卡压住时**顺延到下一步**；`miss` 在项目模式下换成带阶段名的文案，不再劝接单；`PHASE_LABEL` 统一从 `lib/state.js` 导出，删掉 `lib/index.js` 与 `lib/panel.js` 的两份副本；`tools/gaps.mjs` 汇总每条带「阶段 a/b」；新增 `test/gap-project.mjs`（十八套 141 个场景） |
 
 **已经真跑过一轮验收**：让插件自己接了「家庭四路视频监控」项目，从一句话走到接单专家出 `REQUIREMENTS.md`+`TASKS.md`、实现专家交 T1、审查专家按 A1–A12 收口（判「修完再交」，抓出 2 个 P0），修复后复核通过。全过程、暴露的 5 个协议问题与修法记在 **[docs/ACCEPTANCE.md](./docs/ACCEPTANCE.md)**。
 

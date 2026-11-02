@@ -27,16 +27,23 @@
 ```text
 用户：我要做一个视频监控软件
 
-intake    → 问 ≤3 个关键决策（存储本地还是云、要不要人形检测、部署形态），
-            其余自己定并写进「假设」
+research  → 先查市面上有没有现成的，出 PRIOR-ART.md
+            （谁能直接用 + 链接 + 怎么接 / 谁能改着用 + 改多少 / 都不行为什么，逐条说）
+intake    → 第一问固定问水平（要一步步讲清，还是直接给结论），记 level
+          → 问 ≤3 个关键决策（存储本地还是云、要不要人形检测、部署形态），
+            其余自己定并写进「假设」——每条假设引用 PRIOR-ART.md 的结论
           → 产出 REQUIREMENTS.md（目标 / 范围 / 验收标准 / 不做什么）
           → 产出 TASKS.md（任务卡：谁做、输入、输出、依赖、验收）
+          → 把需求压成三句话反述，用户点头才算数
 用户：确认
 backend   → 接口与数据模型，落盘到项目目录
 frontend  → 界面与交互，接 backend 的接口契约
+qa        → 按验收标准写用例、真跑一遍，出测试报告
 review    → 按 REQUIREMENTS.md 的验收标准逐条收口，不合格打回
 intake    → 交付清单给用户
 ```
+
+`research` 那一步的闸门由 `kind: scout` 提供（见第三节 ④）；`level` 决定 intake 之后所有专家怎么说话；用户说「对」或「直接做」都算 `approved`。
 
 全程用户只说两句话：需求 + 确认。中间不催、不解释、不汇报进度。
 
@@ -107,9 +114,11 @@ function apply(ctx) {
 {
   phase: "idle" | "spec" | "build" | "review" | "deliver",
   project: "<项目目录绝对路径>" | null,   // 已实现
+  level: "novice" | "pro",                 // 已实现（v0.20.0）：未判定时整个键不存在
+  approved: false,                         // 已实现（v0.20.0）：方案是否被用户点头，恒为布尔
   experts: ["intake", "backend"],          // 已实现：本会话已加载过的专家
   task: "<当前任务卡 id>" | null,          // 未实现
-  specConfirmed: false,                    // 未实现
+  specConfirmed: false,                    // 未实现——由 approved 取代
   since: "…"                               // 已实现（替代 updatedAt）
 }
 ```
@@ -122,11 +131,15 @@ function apply(ctx) {
 
 ```text
 idle      任何专家都可以上场（闲聊、单次提问走这条）；worker 首次上场会提醒「先接单」
-spec      只做澄清与记录；worker 上场提醒「需求没确认，先别开工」
+spec      只做澄清与记录；worker 上场提醒「需求没确认，先别开工」；scout 上场提醒「先出 PRIOR-ART.md」
 build     按任务卡推进；收口时交给审查专家
 review    只核对不改代码；有交付物才进场
 deliver   交付核对清单：真装得上、真开得起来、README 写的是真原因
 ```
+
+`scout` 分支必须排在所有 `worker` 分支之前（`lib/state.js:228`）：调研专家在 `spec` 阶段上场时，该说的是「先查市面有没有现成的」，而不是「先别开工」。顺序写反，闸门就让调研专家在自己的工作阶段违规。
+
+`level` 未判定时，`spec` 阶段给 worker 的闸门文案后面多问一句「先问一句用户想听多细」——判定后这句消失，所以不会每轮唠叨。
 
 （v0.18.0 去掉了设计稿里的独立 `intake` 阶段：接单只是 `spec` 的入口动作，单列一格会让状态机多一个永远只待一轮的格子。）
 
@@ -145,7 +158,7 @@ deliver   交付核对清单：真装得上、真开得起来、README 写的是
 | 文件 | 内容 | 用途 |
 |---|---|---|
 | `runs.jsonl` | 每轮：阶段、在场专家、命中的任务卡、注入的是目录还是状态卡 | 面板的数据源 |
-| `gaps.jsonl` | 沿用 v1，落空的原话 | 决定下一个专家造什么 |
+| `gaps.jsonl` | 沿用 v1，落空的原话；v0.20.1 起每行可带**可选**的 `phase`（有阶段才写这个键，没有就不加，旧行格式不变） | 决定下一个专家造什么；带阶段才能分清「idle 里落空」和「build 里落空」 |
 | `sessions/<id>.json` | 会话状态快照 | 重启后恢复、面板展示 |
 
 ---
@@ -157,7 +170,7 @@ deliver   交付核对清单：真装得上、真开得起来、README 写的是
 ```yaml
 name: 接单专家
 description: 把模糊需求收敛成需求文档与任务卡，并分派给其他专家
-kind: intake                            # intake | worker | reviewer（默认 worker）
+kind: intake                            # intake | worker | reviewer | scout（默认 worker）
 triggers: [做个, 开发, 搭建, 实现, 需求, 项目]
 handoff: [backend, frontend, review]    # 我通常把活交给谁
 deliverables: [REQUIREMENTS.md, TASKS.md]
@@ -176,6 +189,17 @@ skills:                                 # 一条依赖写一行：YAML 子集只
 
 v1 的 `skills: [a, b]` 仍然能解析（当 `required: false` 且 `source: unknown`），不破坏已有专家包。
 
+**`kind` 的四个取值各管一段行为**（v0.20.0 补了 `scout`）：
+
+| kind | 目录标签 | 阶段行为 |
+|---|---|---|
+| `intake` | 【入口】 | `idle` 打开即进 `spec` |
+| `reviewer` | 【收口】 | `build` 打开即进 `review` |
+| `scout` | 【调研】 | 阶段不变；闸门给「先出 `PRIOR-ART.md`」，**不给**「先别开工」 |
+| `worker` | 无 | 阶段不变；按当前阶段给闸门提示 |
+
+`scout` 存在的全部理由是那个例外：调研必须在 `spec` 阶段做，而 `worker` 在 `spec` 阶段拿到的是「先别开工」。详见 `docs/FEATURES.md` 第九节「`scout`：调研专家怎么进流程」。
+
 ---
 
 ## 五、运行时：一条消息进来
@@ -189,16 +213,22 @@ apply():
   ctx.on("agent/pre-step", async (payload, next) => {
     const decision = await next() ?? payload
     const state = loadSession(payload.agent)     // ③
-    if (state.phase !== "idle") 追加 状态卡（阶段 + 任务 + specConfirmed）
+    if (state.phase !== "idle") 追加 状态卡（阶段 + 方案 + 用户水平 + 在场专家 + 下一步）
     if (state.phase === "idle" && hint) 追加 检查点（v1 那句，仅非项目模式）
+    缺口提示：非项目模式直接追加；项目模式让位状态卡一步（gapPrompts 不标记，下一步补说）
+    缺口记账：不管哪个模式，一句一次（有 phase 就写进行里）
     记 runs.jsonl
   })
+
+expert(name, { project, phase, level, approved }):   // ④ 状态的唯一写入口
+  openExpert → setLevel → setApproved(显式) → advancePhase → 阶段真变了才自动 approved=true
+  落盘 state.json（项目优先，会话留指针）→ 按推进后的状态算 gateNote → 返回 note
 ```
 
 三条与 v1 的差别：
 
 1. **不再替模型判专家**。规则匹配退成「目录里加一句提示」的可选能力（见第七节）。
-2. **检查点降级**。项目模式下只剩状态卡，避免「检查点说该问一句、接单专家说先出文档」两条协议对喊。
+2. **检查点降级**。项目模式下只剩状态卡，避免「检查点说该问一句、接单专家说先出文档」两条协议对喊。**缺口提示与记账例外**（v0.20.1 修 L1）：记账在项目模式下照常写，提示与状态卡互斥——状态卡优先的那一轮不注入，顺延到下一步补说，落空不再静默。
 3. **状态从哪来**：模型通过 `expert()` 与写文件改变它。插件不猜阶段，只读事实——`REQUIREMENTS.md` 存在且用户确认过（模型显式调用 `expert("intake", {phase:"build"})` 或写 `state.json`）才进 build。
 
 ---

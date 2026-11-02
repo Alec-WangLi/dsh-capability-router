@@ -241,6 +241,57 @@ async function step(handler, agentId, messages) {
   assert.ok(stateCount >= 2, `12 步里状态卡至少要补一次，实际 ${stateCount} 次`);
 }
 
+// 场景十（A1–A6）：`expert()` 真的落盘——水平、确认、推进自动确认、撤销、闸门两句。
+// 前面 state-level.mjs 测的是纯函数，这里走真实 lib/index.js 的 onOpen 链路：
+// 参数 → setLevel/setApproved → advancePhase → gateNote → 写盘，中间任何一环漏了这里都会红。
+{
+  const { ctx, tools } = createFakeContext();
+  plugin.apply(ctx, {});
+  const tool = tools.find((definition) => definition.name === "expert");
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-level-"));
+  const statePath = path.join(projectDir, ".capability-router", "state.json");
+  const readProjectState = () => JSON.parse(fs.readFileSync(statePath, "utf8"));
+
+  // A1：新项目接单 → approved: false；没人问过水平，就不该凭空写一个 level
+  await tool.execute({ name: "intake", project: projectDir }, { agent: { id: "sess-10a" } });
+  const fresh = readProjectState();
+  assert.equal(fresh.approved, false, "新项目默认未确认");
+  assert.equal(fresh.phase, "spec");
+  assert.equal(Object.hasOwn(fresh, "level"), false, "没问过水平就不该写 level");
+
+  // A2：问过水平 → 落盘
+  await tool.execute({ name: "intake", project: projectDir, level: "novice" }, { agent: { id: "sess-10b" } });
+  assert.equal(readProjectState().level, "novice", "level 要落盘");
+  await tool.execute({ name: "intake", project: projectDir, level: "pro" }, { agent: { id: "sess-10b" } });
+  assert.equal(readProjectState().level, "pro", "改水平要覆盖掉旧值");
+
+  // A5：spec 阶段开 worker 要提醒；level 已判定就不再追问
+  const dev = await tool.execute({ name: "backend", project: projectDir }, { agent: { id: "sess-10c" } });
+  assert.match(dev.note ?? "", /先别开工/, "spec 阶段开领域专家要给闸门");
+  assert.equal((dev.note ?? "").includes("先问一句用户想听多细"), false, "level 判定过就不该再问");
+
+  // A3：推进到 build → 自动视为方案已确认
+  await tool.execute({ name: "intake", project: projectDir, phase: "build" }, { agent: { id: "sess-10d" } });
+  const built = readProjectState();
+  assert.equal(built.phase, "build");
+  assert.equal(built.approved, true, "推进到 build 且没显式传 approved 时自动确认");
+
+  // A4：显式撤销
+  await tool.execute({ name: "intake", project: projectDir, approved: false }, { agent: { id: "sess-10e" } });
+  assert.equal(readProjectState().approved, false, "approved:false 要能撤销");
+
+  // A5 的另一半 + A6：另一个还没判定水平的项目，开 worker 要多问一句，开 research 要 PRIOR-ART
+  const youngDir = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-level2-"));
+  await tool.execute({ name: "intake", project: youngDir }, { agent: { id: "sess-10f" } });
+  const youngDev = await tool.execute({ name: "backend", project: youngDir }, { agent: { id: "sess-10g" } });
+  assert.match(youngDev.note ?? "", /先问一句用户想听多细/, "level 未判定时要追问");
+
+  const scout = await tool.execute({ name: "research", project: youngDir }, { agent: { id: "sess-10h" } });
+  assert.equal(scout.kind, "scout", "research 的 kind 要活到工具返回里");
+  assert.match(scout.note ?? "", /PRIOR-ART\.md/);
+  assert.equal((scout.note ?? "").includes("先别开工"), false, "调研专家不说先别开工");
+}
+
 fs.rmSync(HOME, { recursive: true, force: true });
 
 console.log("场景一 目录压制角色    ✓");
@@ -251,4 +302,6 @@ console.log("场景五 project 可关    ✓");
 console.log("场景六 显式交卷        ✓");
 console.log("场景七 项目级阶段      ✓");
 console.log("场景八 长任务不早退    ✓");
+console.log("场景九 长任务补状态卡  ✓");
+console.log("场景十 水平与确认落盘  ✓");
 console.log("项目模式测试通过");

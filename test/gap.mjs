@@ -111,6 +111,68 @@ const catalog = {
   assert.match(note, /文档与写作/);
 }
 
+// 场景十二（L1）：项目模式的落空提示要带阶段，且不再劝「先接单」。
+// 原来 gap 块被 `!projectMode` 整段门控，接单之后 gaps.jsonl 断流；现在提示与记账分开：
+// 提示改成「你在哪个阶段、缺什么」，不再说「先 expert("intake")」——单早就接了。
+{
+  const withIntake = {
+    experts: [
+      { id: "intake", name: "接单专家", kind: "intake" },
+      { id: "frontend", name: "前端工程师" },
+    ],
+  };
+  const note = gapText({ kind: "miss", candidates: [] }, withIntake, "帮我做视频监控系统", {
+    phase: "build",
+    phaseLabel: "实现",
+  });
+  assert.ok(note !== undefined, "项目模式里落空也要开口");
+  assert.match(note, /实现/, "要说清现在处在哪个阶段");
+  assert.doesNotMatch(note, /intake/, "已经接过单了，别再让人去接单");
+  assert.doesNotMatch(note, /接单/, "同上：项目模式不该出现「接单」二字");
+}
+
+// 场景十三（L1 向后兼容）：phase: "idle" 与不传 options 必须逐字相同。
+// 非项目模式的文案是稳定契约，面板与老用户都按它读；多传一个 idle 不能改一个字。
+{
+  const miss = { kind: "miss", candidates: [] };
+  const withIntake = { experts: [{ id: "intake", name: "接单专家", kind: "intake" }] };
+  for (const [label, source] of [
+    ["有接单专家", withIntake],
+    ["没有接单专家", catalog],
+  ]) {
+    const bare = gapText(miss, source, "帮我做视频监控系统");
+    const idle = gapText(miss, source, "帮我做视频监控系统", { phase: "idle" });
+    assert.equal(idle, bare, `${label}：phase:"idle" 的文案必须与不传 options 完全一致`);
+  }
+}
+
+// 场景十四（L1）：项目模式下闲聊仍然静默——克制这条不能因为改了门控就丢
+{
+  const withIntake = { experts: [{ id: "intake", name: "接单专家", kind: "intake" }] };
+  assert.equal(gapText({ kind: "miss", candidates: [] }, withIntake, "今天中午吃什么", { phase: "build" }), undefined);
+  assert.equal(gapText({ kind: "miss", candidates: [] }, withIntake, "嗯", { phase: "spec", phaseLabel: "需求确认" }), undefined);
+}
+
+// 场景十五（L1）：multi / ambiguous 的文案不受 options 影响（逐字相同）
+// 跨领域与分不清说的是「怎么分工」，跟阶段无关；带阶段只在 miss 上生效。
+{
+  const withIntake = { experts: [{ id: "intake", name: "接单专家", kind: "intake" }] };
+  const multi = {
+    kind: "multi",
+    candidates: [
+      { expert: { id: "backend", name: "后端工程师" }, score: 3.5 },
+      { expert: { id: "frontend", name: "前端工程师" }, score: 3 },
+    ],
+  };
+  const ambiguous = {
+    kind: "ambiguous",
+    candidates: [{ expert: { name: "前端工程师" } }, { expert: { name: "排障工程师" } }],
+  };
+  const text = "做个系统，界面和接口都要";
+  assert.equal(gapText(multi, withIntake, text, { phase: "build", phaseLabel: "实现" }), gapText(multi, withIntake, text), "multi 不该被阶段改写");
+  assert.equal(gapText(ambiguous, withIntake, text, { phase: "spec", phaseLabel: "需求确认" }), gapText(ambiguous, withIntake, text), "ambiguous 不该被阶段改写");
+}
+
 console.log("场景一 任务判定      ✓");
 console.log("场景二 闲聊不打扰    ✓");
 console.log("场景三 命中不说话    ✓");
@@ -120,4 +182,8 @@ console.log("场景六 分不清        ✓");
 console.log("场景七 候选不足      ✓");
 console.log("场景八 空目录        ✓");
 console.log("场景九 跨领域        ✓");
+console.log("场景十二 项目模式文案 ✓");
+console.log("场景十三 idle 逐字相同 ✓");
+console.log("场景十四 闲聊仍静默  ✓");
+console.log("场景十五 跨领域不受影响 ✓");
 console.log("缺口提示测试通过");

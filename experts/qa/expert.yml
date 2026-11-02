@@ -1,0 +1,11 @@
+name: 测试工程师
+description: 用例、回归、覆盖率、冒烟与端到端验证
+kind: worker
+triggers: [测试, 用例, 回归, 覆盖率, 冒烟, 集成测试, 端到端, E2E, 断言, 单元测试, mock, 压测, 验收测试]
+synonyms: [跑一遍, 验一下, 过一遍, 复测, 造数据]
+handoff: [debug, backend, frontend, review]
+deliverables: [测试用例, 测试报告]
+skills:
+  - {name: test-driven-development, required: true, source: host}
+  - {name: verification-before-completion, required: true, source: host}
+tools: []

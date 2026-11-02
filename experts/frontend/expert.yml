@@ -1,7 +1,7 @@
 name: 前端工程师
 description: 界面、交互、样式、浏览器行为
-triggers: [界面, 样式, 前端, 组件, 布局, 交互, 渲染, 动画, 响应式, 页面, CSS, HTML, React, Vue, 浏览器]
-synonyms: [登录, 按钮, 表单, 首页, 弹窗, 滚动, 适配, 颜色, 字体, 图标, 截图, 刷新]
+triggers: [界面, 样式, 前端, 组件, 布局, 交互, 渲染, 动画, 响应式, 页面, 表单, CSS, HTML, React, Vue, 浏览器]
+synonyms: [登录, 按钮, 首页, 弹窗, 滚动, 适配, 颜色, 字体, 图标, 截图, 刷新]
 kind: worker
 handoff: [backend, review]
 deliverables: [页面组件, 样式文件]

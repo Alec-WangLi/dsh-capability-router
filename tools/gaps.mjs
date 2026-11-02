@@ -42,13 +42,20 @@ const scope = showAll ? rows : rows.slice(-200);
 const groups = new Map();
 for (const row of scope) {
   const key = `${row.kind}\u0000${(row.text ?? "").trim()}`;
-  const entry = groups.get(key) ?? { kind: row.kind, text: row.text, count: 0, last: row.at, candidates: row.candidates ?? [] };
+  const entry =
+    groups.get(key) ??
+    { kind: row.kind, text: row.text, count: 0, last: row.at, candidates: row.candidates ?? [], phases: new Set() };
   entry.count += 1;
+  // 同一句话在 idle 里落空和在大任务里落空是两种信号：聚合仍按原话，
+  // 但把这句话在哪些阶段落空过带上，不然新写的 phase 字段没人看等于没写。
+  if (typeof row.phase === "string" && row.phase !== "") entry.phases.add(row.phase);
   if (row.at > entry.last) entry.last = row.at;
   groups.set(key, entry);
 }
 
-const sorted = [...groups.values()].sort((left, right) => right.count - left.count || String(right.last).localeCompare(String(left.last)));
+const sorted = [...groups.values()]
+  .map((entry) => ({ ...entry, phases: [...entry.phases] }))
+  .sort((left, right) => right.count - left.count || String(right.last).localeCompare(String(left.last)));
 
 if (asJson) {
   console.log(JSON.stringify({ file, total: scope.length, groups: sorted }, null, 2));
@@ -64,7 +71,8 @@ console.log(`缺口记录：${scope.length} 条，去重后 ${sorted.length} 种
 console.log("");
 for (const entry of sorted.slice(0, 20)) {
   const tag = entry.kind === "ambiguous" ? `分不清/${entry.candidates.join("|")}` : "没人接";
+  const where = entry.phases.length === 0 ? "" : `  ·  阶段 ${entry.phases.join("/")}`;
   console.log(`×${String(entry.count).padStart(2)}  ${entry.text}`);
-  console.log(`      ${tag}  ·  最近 ${entry.last}`);
+  console.log(`      ${tag}${where}  ·  最近 ${entry.last}`);
 }
 if (sorted.length > 20) console.log(`\n还有 ${sorted.length - 20} 种没显示，用 --all 或 --json 看全量。`);
