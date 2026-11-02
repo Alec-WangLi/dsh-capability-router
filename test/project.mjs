@@ -347,6 +347,20 @@ async function step(handler, agentId, messages) {
   const recheck = await tool.execute({ name: "review", project: deliverDir }, { agent: { id: "sess-10k" } });
   assert.match(recheck.note ?? "", /核的是哪一版/, "交付后复核要先分清核的是哪一版");
 
+  // 状态说「按任务卡推进」，而项目目录里可能一份都没有。状态是插件记的、文档是模型写的，
+  // 两边谁都不管谁；expert() 是唯一同时握着项目路径和新旧阶段的地方，对账只能放这。
+  const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-docs-"));
+  await tool.execute({ name: "intake", project: emptyDir }, { agent: { id: "sess-10m" } });
+  const noDocs = await tool.execute({ name: "intake", project: emptyDir, phase: "build" }, { agent: { id: "sess-10m" } });
+  assert.match(noDocs.note ?? "", /没有 REQUIREMENTS\.md/, "推进到实现时要核对任务卡有没有落盘");
+  const fullDir = fs.mkdtempSync(path.join(os.tmpdir(), "caprouter-docs2-"));
+  fs.writeFileSync(path.join(fullDir, "REQUIREMENTS.md"), "# 需求\n");
+  fs.writeFileSync(path.join(fullDir, "TASKS.md"), "# 卡\n");
+  await tool.execute({ name: "intake", project: fullDir }, { agent: { id: "sess-10n" } });
+  const withDocs = await tool.execute({ name: "intake", project: fullDir, phase: "build" }, { agent: { id: "sess-10n" } });
+  assert.doesNotMatch(withDocs.note ?? "", /没有 REQUIREMENTS\.md/, "两份文档都在时不该再提醒");
+  for (const dir of [emptyDir, fullDir]) fs.rmSync(dir, { recursive: true, force: true });
+
   // 写盘失败要说话。以前 writeState 静默吞错，project 指到一个文件上时状态每轮都丢、
   // 每轮都从头开始，而模型看到的 found:true 一切正常——静默失败比不记更贵。
   const notADir = path.join(os.tmpdir(), `caprouter-notadir-${process.pid}.txt`);
